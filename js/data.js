@@ -18,8 +18,8 @@ import {
 
 const GEMINI_API_KEY = window.CONFIG?.GEMINI_API_KEY || '';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCNZyxbGhtg9IVS_COT62aMeNmsz0KH_80",
+const firebaseConfig = window.CONFIG?.FIREBASE_CONFIG || {
+  apiKey: "MISSING_API_KEY",
   authDomain: "exercise002.firebaseapp.com",
   projectId: "exercise002",
   storageBucket: "exercise002.firebasestorage.app",

@@ -25,6 +25,16 @@ window.App = {
       this._setUserInfo();
       console.log('[App] Initializing map...');
       MapManager.init('map');
+
+      // Trigger location prompt on startup
+      console.log('[App] Requesting user location...');
+      MapManager.getUserLocation().then(pos => {
+        console.log('[App] Location obtained:', pos);
+        MapManager.panTo(pos.lat, pos.lng, 13);
+      }).catch(e => {
+        console.warn('[App] Location denied or failed:', e.message);
+      });
+
       console.log('[App] Loading dashboard...');
       await this._loadDashboard();
       console.log('[App] Binding nav...');
