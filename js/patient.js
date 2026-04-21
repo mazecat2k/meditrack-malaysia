@@ -3,17 +3,24 @@ const PatientDash = {
   user: null,
   userLat: 3.1412, userLng: 101.6865,
   activeEmergency: null,
-  pollInterval: null,
   simInterval: null,
   etaSeconds: 0,
+  emergencyListener: null,
 
   async init(user) {
     this.user = user;
-    this.activeEmergency = null;
+    this.activeEmergency = await DB.getActiveByPatient(user.id);
     this.renderPanel();
     await this._locateUser();
-    MapManager.loadHospitals(h => this.showHospitalDetail(h));
-    this._startPolling();
+    
+    // Subscribe to marker updates (now handled in map.js load functions)
+    await MapManager.loadHospitals(h => this.showHospitalDetail(h));
+    await MapManager.loadAmbulances(false); 
+    
+    if (this.activeEmergency) {
+      this._subscribeToEmergency(this.activeEmergency.id);
+      this._renderTracker(await DB.getAmbulanceById(this.activeEmergency.ambulanceId));
+    }
   },
 
   async _locateUser() {
@@ -23,16 +30,16 @@ const PatientDash = {
     } catch(e) {}
     
     // Spawn local ambulances if none are within 30km
-    const nearAmbs = DB.getAmbulances().filter(a => DB.distKm(this.userLat, this.userLng, a.lat, a.lng) < 30);
+    const ambs = await DB.getAmbulances();
+    const nearAmbs = ambs.filter(a => DB.distKm(this.userLat, this.userLng, a.lat, a.lng) < 30);
     if (nearAmbs.length === 0) {
-      DB.addAmbulance({ id: DB.genId(), driverId: null, vehicleNo: 'MED ' + Math.floor(Math.random()*9000+1000), name: 'Local Unit 01', status: 'available', lat: this.userLat + 0.015, lng: this.userLng + 0.018, currentEmergencyId: null });
-      DB.addAmbulance({ id: DB.genId(), driverId: null, vehicleNo: 'MED ' + Math.floor(Math.random()*9000+1000), name: 'Local Unit 02', status: 'available', lat: this.userLat - 0.01, lng: this.userLng + 0.02, currentEmergencyId: null });
+      await DB.addAmbulance({ id: DB.genId(), driverId: null, vehicleNo: 'MED ' + Math.floor(Math.random()*9000+1000), name: 'Local Unit 01', status: 'available', lat: this.userLat + 0.015, lng: this.userLng + 0.018, currentEmergencyId: null });
+      await DB.addAmbulance({ id: DB.genId(), driverId: null, vehicleNo: 'MED ' + Math.floor(Math.random()*9000+1000), name: 'Local Unit 02', status: 'available', lat: this.userLat - 0.01, lng: this.userLng + 0.02, currentEmergencyId: null });
     }
 
     MapManager.setPatientMarker(this.userLat, this.userLng, '📍 You');
     MapManager.panTo(this.userLat, this.userLng, 13);
-    this._refreshHospitalList();
-    MapManager.loadAmbulances(false); // show available ambulances
+    await this._refreshHospitalList();
   },
 
   renderPanel() {
@@ -54,10 +61,11 @@ const PatientDash = {
     this._refreshHospitalList();
   },
 
-  _refreshHospitalList() {
+  async _refreshHospitalList() {
     const list = document.getElementById('hospital-list');
     if (!list) return;
-    const hospitals = DB.getHospitals()
+    const hospitalsAll = await DB.getHospitals();
+    const hospitals = hospitalsAll
       .map(h => ({ ...h, dist: DB.distKm(this.userLat, this.userLng, h.lat, h.lng) }))
       .sort((a,b) => a.dist - b.dist)
       .slice(0, 10);
@@ -68,7 +76,7 @@ const PatientDash = {
     const pct = Math.round((h.availableBeds / h.totalBeds) * 100);
     const cls = h.erStatus==='full'||h.availableBeds===0 ? 'status-full' : h.availableBeds<=15||h.erStatus==='limited' ? 'status-limited' : 'status-open';
     const label = h.erStatus==='full'||h.availableBeds===0 ? '🔴 Full' : h.availableBeds<=15||h.erStatus==='limited' ? `🟡 Limited` : '🟢 Available';
-    return `<div class="hosp-card" onclick="PatientDash.showHospitalDetail(DB.getHospitalById('${h.id}'))">
+    return `<div class="hosp-card" onclick="PatientDash.showHospitalDetailById('${h.id}')">
       <div class="hosp-card-top">
         <span class="hosp-name">${h.shortName}</span>
         <span class="hosp-badge ${cls}">${label}</span>
@@ -82,6 +90,11 @@ const PatientDash = {
         <span class="vacancy-text">${h.availableBeds}/${h.totalBeds} beds</span>
       </div>
     </div>`;
+  },
+
+  async showHospitalDetailById(id) {
+    const h = await DB.getHospitalById(id);
+    this.showHospitalDetail(h);
   },
 
   showHospitalDetail(h) {
@@ -118,19 +131,20 @@ const PatientDash = {
 
   async callAmbulance() {
     if (this.activeEmergency) { Toast.show('You already have an active emergency!','warn'); return; }
-    const ambulance = MapManager.getNearestAvailableAmbulance(this.userLat, this.userLng);
+    const ambulance = await MapManager.getNearestAvailableAmbulance(this.userLat, this.userLng);
     if (!ambulance) { Toast.show('No ambulances available right now. Please call 999 directly.','error'); return; }
-    // hospitalId is null — patient will choose AFTER ambulance arrives
+    
     const emergency = {
       id: DB.genId(), patientId: this.user.id, ambulanceId: ambulance.id,
       hospitalId: null, status:'dispatched',
       patientLat: this.userLat, patientLng: this.userLng,
       timestamp: Date.now(), arrivalTime: null
     };
-    DB.addEmergency(emergency);
-    DB.updateAmbulance(ambulance.id, { status:'busy', currentEmergencyId:emergency.id });
+    
+    await DB.addEmergency(emergency);
+    await DB.updateAmbulance(ambulance.id, { status:'busy', currentEmergencyId:emergency.id });
     this.activeEmergency = emergency;
-    MapManager.upsertAmbulanceMarker(DB.getAmbulanceById(ambulance.id));
+    this._subscribeToEmergency(emergency.id);
     
     Toast.show('🚑 Calculating routing...','info');
     const route = await MapManager.drawRoute([ambulance.lat, ambulance.lng], [this.userLat, this.userLng]);
@@ -139,15 +153,34 @@ const PatientDash = {
     Toast.show('🚑 Ambulance dispatched! Help is on the way.','success');
     document.getElementById('sos-btn').disabled = true;
     document.getElementById('sos-btn').textContent = '🚑 Ambulance Dispatched';
+    
     this._startSimulation(ambulance.id, route.path);
     this._renderTracker(ambulance);
     const ctx = `Patient at (${this.userLat.toFixed(4)}, ${this.userLng.toFixed(4)}) called an ambulance. ${ambulance.name} (${ambulance.vehicleNo}) is on the way, ETA ~${Math.round(this.etaSeconds/60)} min. Patient will choose destination hospital after pickup.`;
     Chatbot.updateContext(ctx);
   },
 
-  _renderTracker(ambulance) {
+  _subscribeToEmergency(id) {
+    if (this.emergencyListener) this.emergencyListener();
+    this.emergencyListener = db.collection(DB.K.EMERGENCIES).doc(id).onSnapshot(doc => {
+      const data = doc.data();
+      if (!data) return;
+      
+      // If driver marked as arrived
+      if (data.status === 'arrived' && this.activeEmergency?.status !== 'arrived') {
+        this._onAmbulanceArrived(data.ambulanceId);
+      }
+      // If completed or cancelled by driver/system
+      if (data.status === 'completed' || data.status === 'cancelled') {
+        this._resetEmergencyUI();
+      }
+      this.activeEmergency = data;
+    });
+  },
+
+  async _renderTracker(ambulance) {
     const tracker = document.getElementById('emergency-tracker');
-    if (!tracker) return;
+    if (!tracker || !ambulance) return;
     tracker.classList.remove('hidden');
     tracker.innerHTML = `
       <div class="tracker-card">
@@ -162,26 +195,28 @@ const PatientDash = {
 
   _startSimulation(ambulanceId, path) {
     if (this.simInterval) clearInterval(this.simInterval);
-    let amb = DB.getAmbulanceById(ambulanceId);
     const stepCount = this.etaSeconds;
     let steps = 0;
 
-    this.simInterval = setInterval(() => {
+    this.simInterval = setInterval(async () => {
       steps++;
-      amb = DB.getAmbulanceById(ambulanceId);
-      if (!amb || amb.status !== 'busy') { clearInterval(this.simInterval); return; }
+      // We don't fetch the whole object, just push updates if this is a "pure" simulation
+      // In a real multi-user app, the ambulance location would come from the DRIVER'S device.
+      // But for demo purposes, we'll keep simulating movement if driver isn't real.
       
       const pct = Math.min(1, steps / stepCount);
       const pathIdx = Math.min(path.length - 1, Math.floor(pct * path.length));
       const [newLat, newLng] = path[pathIdx];
       
-      DB.updateAmbulance(ambulanceId, { lat:newLat, lng:newLng });
-      MapManager.moveAmbulanceTo(ambulanceId, newLat, newLng);
+      // Update Firestore so the driver/others see the movement
+      await DB.updateAmbulance(ambulanceId, { lat:newLat, lng:newLng });
+      
       this.etaSeconds = Math.max(0, this.etaSeconds - 1);
       const etaEl = document.getElementById('eta-display');
       const barEl = document.getElementById('tracker-bar');
       if (etaEl) etaEl.textContent = this._fmtEta(this.etaSeconds);
       if (barEl) { const fillPct = Math.min(100, (steps/stepCount)*100); barEl.style.width = fillPct+'%'; }
+      
       if (this.etaSeconds <= 0 || steps >= stepCount) {
         clearInterval(this.simInterval);
         this._onAmbulanceArrived(ambulanceId);
@@ -189,16 +224,20 @@ const PatientDash = {
     }, 1000);
   },
 
-  _onAmbulanceArrived(ambulanceId) {
+  async _onAmbulanceArrived(ambulanceId) {
+    if (this.simInterval) clearInterval(this.simInterval);
     Toast.show('🚑 Ambulance arrived! Please choose a hospital.', 'success');
-    if (this.activeEmergency) DB.updateEmergency(this.activeEmergency.id, { status:'arrived', arrivalTime:Date.now() });
+    if (this.activeEmergency && this.activeEmergency.status !== 'arrived') {
+       await DB.updateEmergency(this.activeEmergency.id, { status:'arrived', arrivalTime:Date.now() });
+    }
     MapManager.clearRoute();
     const tracker = document.getElementById('emergency-tracker');
-    if (tracker) tracker.innerHTML = this._renderHospitalPicker(ambulanceId);
+    if (tracker) tracker.innerHTML = await this._renderHospitalPicker(ambulanceId);
   },
 
-  _renderHospitalPicker(ambulanceId) {
-    const hospitals = DB.getHospitals()
+  async _renderHospitalPicker(ambulanceId) {
+    const hospitalsAll = await DB.getHospitals();
+    const hospitals = hospitalsAll
       .map(h => ({ ...h, dist: DB.distKm(this.userLat, this.userLng, h.lat, h.lng) }))
       .sort((a,b) => {
         const aFull = a.erStatus==='full'||a.availableBeds===0;
@@ -231,10 +270,11 @@ const PatientDash = {
   },
 
   async selectHospital(hospitalId, ambulanceId) {
-    const hospital = DB.getHospitalById(hospitalId);
+    const hospital = await DB.getHospitalById(hospitalId);
     if (!hospital || !this.activeEmergency) return;
-    DB.updateEmergency(this.activeEmergency.id, { hospitalId, status:'en_route' });
-    this.activeEmergency = { ...this.activeEmergency, hospitalId, status:'en_route' };
+    const upd = { hospitalId, status:'en_route' };
+    await DB.updateEmergency(this.activeEmergency.id, upd);
+    this.activeEmergency = { ...this.activeEmergency, ...upd };
     
     Toast.show('🏥 Calculating routing...','info');
     const route = await MapManager.drawRoute([this.userLat, this.userLng], [hospital.lat, hospital.lng]);
@@ -273,14 +313,13 @@ const PatientDash = {
     const totalSeconds = this.etaSeconds;
     let steps = 0;
     
-    this.simInterval = setInterval(() => {
+    this.simInterval = setInterval(async () => {
       steps++;
       const pct = Math.min(1, steps / totalSeconds);
       const pathIdx = Math.min(path.length - 1, Math.floor(pct * path.length));
       const [currentLat, currentLng] = path[pathIdx];
       
-      DB.updateAmbulance(ambulanceId, { lat:currentLat, lng:currentLng });
-      MapManager.moveAmbulanceTo(ambulanceId, currentLat, currentLng);
+      await DB.updateAmbulance(ambulanceId, { lat:currentLat, lng:currentLng });
       this.etaSeconds = Math.max(0, totalSeconds - steps);
       const etaEl = document.getElementById('eta-display');
       const barEl = document.getElementById('tracker-bar');
@@ -293,59 +332,39 @@ const PatientDash = {
     }, 1000);
   },
 
-  _onHospitalArrival(ambulanceId, hospital) {
+  async _onHospitalArrival(ambulanceId, hospital) {
     Toast.show(`✅ Arrived at ${hospital.shortName}!`, 'success');
-    DB.updateAmbulance(ambulanceId, { status:'available', currentEmergencyId:null, lat:hospital.lat, lng:hospital.lng });
-    if (this.activeEmergency) DB.updateEmergency(this.activeEmergency.id, { status:'completed' });
-    this.activeEmergency = null;
-    MapManager.clearRoute();
-    MapManager.removePatientMarker();
-    MapManager.panTo(hospital.lat, hospital.lng, 15);
+    await DB.updateAmbulance(ambulanceId, { status:'available', currentEmergencyId:null, lat:hospital.lat, lng:hospital.lng });
+    if (this.activeEmergency) await DB.updateEmergency(this.activeEmergency.id, { status:'completed' });
+    this._resetEmergencyUI();
     const tracker = document.getElementById('emergency-tracker');
     if (tracker) tracker.innerHTML = `<div class="arrived-box">✅ Arrived at ${hospital.shortName}!<br><small>Please proceed to the Emergency Department.</small></div>`;
-    const btn = document.getElementById('sos-btn');
-    if (btn) { btn.disabled=false; btn.innerHTML='<span class="sos-icon">🚨</span><span>CALL AMBULANCE</span>'; }
   },
 
-  cancelEmergency() {
+  async cancelEmergency() {
     if (!this.activeEmergency) return;
     if (this.simInterval) clearInterval(this.simInterval);
-    DB.updateAmbulance(this.activeEmergency.ambulanceId, { status:'available', currentEmergencyId:null });
-    DB.updateEmergency(this.activeEmergency.id, { status:'cancelled' });
+    await DB.updateAmbulance(this.activeEmergency.ambulanceId, { status:'available', currentEmergencyId:null });
+    await DB.updateEmergency(this.activeEmergency.id, { status:'cancelled' });
+    this._resetEmergencyUI();
+    Toast.show('Emergency cancelled.','info');
+  },
+
+  _resetEmergencyUI() {
     this.activeEmergency = null;
+    if (this.simInterval) clearInterval(this.simInterval);
     MapManager.clearRoute();
     MapManager.removePatientMarker();
     const tracker = document.getElementById('emergency-tracker');
     if (tracker) tracker.classList.add('hidden');
     const btn = document.getElementById('sos-btn');
     if (btn) { btn.disabled=false; btn.innerHTML='<span class="sos-icon">🚨</span><span>CALL AMBULANCE</span>'; }
-    Toast.show('Emergency cancelled.','info');
   },
 
   _fmtEta(s) { const m=Math.floor(s/60), sec=s%60; return `${m}m ${sec}s`; },
 
-  _startPolling() {
-    this.pollInterval = setInterval(() => {
-      this._refreshHospitalList();
-      DB.getHospitals().forEach(h => MapManager.upsertHospitalMarker(h, h2=>this.showHospitalDetail(h2)));
-      MapManager.loadAmbulances(false); // refresh ambulance markers
-      
-      // Detect if driver manually marked arrival (status changed to 'arrived' externally)
-      if (this.activeEmergency?.status === 'dispatched') {
-        const live = DB.getEmergencyById(this.activeEmergency.id);
-        if (live?.status === 'arrived') {
-          this.activeEmergency = live;
-          if (this.simInterval) clearInterval(this.simInterval);
-          MapManager.clearRoute();
-          const tracker = document.getElementById('emergency-tracker');
-          if (tracker) tracker.innerHTML = this._renderHospitalPicker(live.ambulanceId);
-        }
-      }
-    }, 3000);
-  },
-
   destroy() {
-    if (this.pollInterval) clearInterval(this.pollInterval);
+    if (this.emergencyListener) this.emergencyListener();
     if (this.simInterval) clearInterval(this.simInterval);
   }
 };

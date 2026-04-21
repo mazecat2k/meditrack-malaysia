@@ -3,28 +3,33 @@ const AmbulanceDash = {
   user: null,
   ambulance: null,
   emergency: null,
-  pollInterval: null,
+  ambulanceListener: null,
+  emergencyListener: null,
 
-  init(user) {
+  async init(user) {
     this.user = user;
-    this.ambulance = DB.getAmbulanceByDriver(user.id);
+    this.ambulance = await DB.getAmbulanceByDriver(user.id);
     if (!this.ambulance) { Toast.show('No ambulance linked to your account.','error'); return; }
-    this.emergency = DB.getActiveByAmbulance(this.ambulance.id);
-    MapManager.loadHospitals(null);
-    MapManager.loadAmbulances(true);
+    this.emergency = await DB.getActiveByAmbulance(this.ambulance.id);
+    
+    // Subscribe to marker updates (now handled in map.js load functions)
+    await MapManager.loadHospitals(null);
+    await MapManager.loadAmbulances(true);
     MapManager.panTo(this.ambulance.lat, this.ambulance.lng, 13);
+    
     this.renderPanel();
-    this._startPolling();
+    this._subscribeToAmbulance();
   },
 
-  renderPanel() {
-    this.ambulance = DB.getAmbulanceByDriver(this.user.id);
-    this.emergency = DB.getActiveByAmbulance(this.ambulance.id);
+  async renderPanel() {
+    this.ambulance = await DB.getAmbulanceByDriver(this.user.id);
+    this.emergency = await DB.getActiveByAmbulance(this.ambulance.id);
     const a = this.ambulance;
     const statusOpts = ['available','busy','off_duty'].map(v =>
       `<option value="${v}" ${a.status===v?'selected':''}>${{available:'🟢 Available',busy:'🟠 Busy',off_duty:'⚫ Off Duty'}[v]}</option>`).join('');
 
     const panel = document.getElementById('side-panel');
+    if (!panel) return;
     panel.innerHTML = `
       <div class="panel-header">
         <h2>🚑 ${a.name}</h2>
@@ -50,11 +55,18 @@ const AmbulanceDash = {
       <div class="amb-stats-section">
         <h3 class="section-title">Today's Stats</h3>
         <div class="amb-stats-grid">
-          <div class="a-stat-box"><div class="a-stat-num">${this._countCompleted()}</div><div class="a-stat-lbl">Completed</div></div>
+          <div class="a-stat-box"><div class="a-stat-num" id="stat-completed">...</div><div class="a-stat-lbl">Completed</div></div>
           <div class="a-stat-box"><div class="a-stat-num">${a.status==='available'?'YES':'NO'}</div><div class="a-stat-lbl">Available</div></div>
         </div>
       </div>`;
     this.updateDispatchUI();
+    this._updateCompletedCount();
+  },
+
+  async _updateCompletedCount() {
+    const num = await this._countCompleted();
+    const el = document.getElementById('stat-completed');
+    if (el) el.textContent = num;
   },
 
   async updateDispatchUI() {
@@ -66,8 +78,8 @@ const AmbulanceDash = {
       return;
     }
     const e = this.emergency;
-    const patient = DB.getUserById(e.patientId);
-    const hospital = e.hospitalId ? DB.getHospitalById(e.hospitalId) : null;
+    const patient = await DB.getUserById(e.patientId);
+    const hospital = e.hospitalId ? await DB.getHospitalById(e.hospitalId) : null;
 
     // ── Phase 1: Ambulance going TO patient ──────────────────────
     if (e.status === 'dispatched') {
@@ -125,10 +137,9 @@ const AmbulanceDash = {
   },
 
 
-  updateStatus(status) {
-    DB.updateAmbulance(this.ambulance.id, { status });
-    this.ambulance = DB.getAmbulanceByDriver(this.user.id);
-    MapManager.upsertAmbulanceMarker(this.ambulance);
+  async updateStatus(status) {
+    await DB.updateAmbulance(this.ambulance.id, { status });
+    this.ambulance = await DB.getAmbulanceByDriver(this.user.id);
     const ind = document.querySelector('.amb-status-indicator');
     if (ind) {
       ind.className = `amb-status-indicator status-${status}`;
@@ -140,55 +151,84 @@ const AmbulanceDash = {
   async updateLocation() {
     try {
       const pos = await MapManager.getUserLocation();
-      DB.updateAmbulance(this.ambulance.id, { lat:pos.lat, lng:pos.lng });
-      this.ambulance = DB.getAmbulanceByDriver(this.user.id);
-      MapManager.moveAmbulanceTo(this.ambulance.id, pos.lat, pos.lng);
+      await DB.updateAmbulance(this.ambulance.id, { lat:pos.lat, lng:pos.lng });
+      this.ambulance = await DB.getAmbulanceByDriver(this.user.id);
       MapManager.panTo(pos.lat, pos.lng, 14);
       const coords = document.querySelector('.loc-coords');
       if (coords) coords.textContent = `${pos.lat.toFixed(4)}°N, ${pos.lng.toFixed(4)}°E`;
       Toast.show('📍 Location updated!','success');
-      if (this.emergency) MapManager.drawRoute([pos.lat, pos.lng], [this.emergency.patientLat, this.emergency.patientLng]);
+      if (this.emergency) await MapManager.drawRoute([pos.lat, pos.lng], [this.emergency.patientLat, this.emergency.patientLng]);
     } catch(e) { Toast.show('Could not get location.','error'); }
   },
 
-  markArrivedAtPatient() {
+  async markArrivedAtPatient() {
     if (!this.emergency) return;
-    // Set status to 'arrived' — patient will see hospital picker
-    DB.updateEmergency(this.emergency.id, { status:'arrived', arrivalTime:Date.now() });
-    this.emergency = DB.getActiveByAmbulance(this.ambulance.id);
+    await DB.updateEmergency(this.emergency.id, { status:'arrived', arrivalTime:Date.now() });
+    this.emergency = await DB.getActiveByAmbulance(this.ambulance.id);
     MapManager.clearRoute();
     Toast.show('✅ Marked arrived at patient. Waiting for hospital selection.','success');
     this.renderPanel();
   },
 
-  arriveAtHospital() {
+  async arriveAtHospital() {
     if (!this.emergency) return;
-    const hospital = this.emergency.hospitalId ? DB.getHospitalById(this.emergency.hospitalId) : null;
-    DB.updateEmergency(this.emergency.id, { status:'completed' });
-    DB.updateAmbulance(this.ambulance.id, { status:'available', currentEmergencyId:null,
+    const hospital = this.emergency.hospitalId ? await DB.getHospitalById(this.emergency.hospitalId) : null;
+    await DB.updateEmergency(this.emergency.id, { status:'completed' });
+    await DB.updateAmbulance(this.ambulance.id, { 
+      status:'available', 
+      currentEmergencyId:null,
       lat: hospital?.lat || this.ambulance.lat,
-      lng: hospital?.lng || this.ambulance.lng });
+      lng: hospital?.lng || this.ambulance.lng 
+    });
     this.emergency = null;
+    if (this.emergencyListener) { this.emergencyListener(); this.emergencyListener = null; }
     MapManager.clearRoute();
     MapManager.removePatientMarker();
     Toast.show(`✅ Arrived at ${hospital?.shortName||'hospital'}!`,'success');
     this.renderPanel();
   },
 
-  _countCompleted() {
-    return DB.getEmergencies().filter(e => e.ambulanceId===this.ambulance.id && e.status==='completed').length;
+  async _countCompleted() {
+    const ems = await DB.getEmergencies();
+    return ems.filter(e => e.ambulanceId===this.ambulance.id && e.status==='completed').length;
   },
 
-  _startPolling() {
-    this.pollInterval = setInterval(() => {
-      const prevId = this.emergency?.id;
-      const prevStatus = this.emergency?.status;
-      this.emergency = DB.getActiveByAmbulance(this.ambulance.id);
-      if (this.emergency?.id !== prevId || this.emergency?.status !== prevStatus) {
+  _subscribeToAmbulance() {
+     if (this.ambulanceListener) this.ambulanceListener();
+     this.ambulanceListener = db.collection(DB.K.AMBULANCES).doc(this.ambulance.id).onSnapshot(async doc => {
+        const data = doc.data();
+        if (!data) return;
+        
+        const prevEmergencyId = this.ambulance?.currentEmergencyId;
+        this.ambulance = data;
+
+        if (data.currentEmergencyId && data.currentEmergencyId !== prevEmergencyId) {
+          this.emergency = await DB.getEmergencyById(data.currentEmergencyId);
+          this._subscribeToEmergency(data.currentEmergencyId);
+          this.updateDispatchUI();
+          Toast.show('🚨 NEW DISPATCH RECEIVED!', 'success', 6000);
+        } else if (!data.currentEmergencyId && prevEmergencyId) {
+          this.emergency = null;
+          if (this.emergencyListener) { this.emergencyListener(); this.emergencyListener = null; }
+          this.updateDispatchUI();
+        }
+     });
+  },
+
+  _subscribeToEmergency(id) {
+    if (this.emergencyListener) this.emergencyListener();
+    this.emergencyListener = db.collection(DB.K.EMERGENCIES).doc(id).onSnapshot(doc => {
+      const data = doc.data();
+      if (!data) return;
+      if (data.status !== this.emergency?.status || data.hospitalId !== this.emergency?.hospitalId) {
+        this.emergency = data;
         this.updateDispatchUI();
       }
-    }, 3000);
+    });
   },
 
-  destroy() { if(this.pollInterval) clearInterval(this.pollInterval); }
+  destroy() { 
+    if(this.ambulanceListener) this.ambulanceListener(); 
+    if(this.emergencyListener) this.emergencyListener();
+  }
 };

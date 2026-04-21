@@ -14,13 +14,13 @@ const Toast = {
 const App = {
   user: null,
 
-  init() {
-    DB.init();
-    this.user = Auth.requireAuth();
+  async init() {
+    await DB.init();
+    this.user = await Auth.requireAuth();
     if (!this.user) return;
     this._setUserInfo();
     MapManager.init('map');
-    this._loadDashboard();
+    await this._loadDashboard();
     this._bindNav();
   },
 
@@ -33,17 +33,17 @@ const App = {
     if (avatarEl) avatarEl.textContent = { patient:'🧑', hospital:'🏥', ambulance:'🚑' }[this.user.role];
   },
 
-  _loadDashboard() {
+  async _loadDashboard() {
     const role = this.user.role;
     // Init chatbot for all roles
     Chatbot.init(this.user, null);
 
     if (role === 'patient') {
-      PatientDash.init(this.user);
+      await PatientDash.init(this.user);
     } else if (role === 'hospital') {
-      HospitalDash.init(this.user);
+      await HospitalDash.init(this.user);
     } else if (role === 'ambulance') {
-      AmbulanceDash.init(this.user);
+      await AmbulanceDash.init(this.user);
     }
     MapManager.invalidate();
   },

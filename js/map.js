@@ -18,9 +18,19 @@ const MapManager = {
   },
 
   // ── Hospital Markers ─────────────────────────────────────────
-  loadHospitals(onClickCb) {
-    const hospitals = DB.getHospitals();
+  async loadHospitals(onClickCb) {
+    // One-time initial load
+    const hospitals = await DB.getHospitals();
     hospitals.forEach(h => this.upsertHospitalMarker(h, onClickCb));
+
+    // Listen for real-time updates
+    db.collection(DB.K.HOSPITALS).onSnapshot(snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type === 'added' || change.type === 'modified') {
+          this.upsertHospitalMarker(change.doc.data(), onClickCb);
+        }
+      });
+    });
   },
 
   upsertHospitalMarker(h, onClickCb) {
@@ -35,8 +45,8 @@ const MapManager = {
     }
   },
 
-  refreshHospitalMarker(hospitalId, onClickCb) {
-    const h = DB.getHospitalById(hospitalId);
+  async refreshHospitalMarker(hospitalId, onClickCb) {
+    const h = await DB.getHospitalById(hospitalId);
     if (h) this.upsertHospitalMarker(h, onClickCb);
   },
 
@@ -56,9 +66,24 @@ const MapManager = {
   },
 
   // ── Ambulance Markers ─────────────────────────────────────────
-  loadAmbulances(showAll) {
-    const ambulances = showAll ? DB.getAmbulances() : DB.getAmbulances().filter(a=>a.status!=='off_duty');
-    ambulances.forEach(a => this.upsertAmbulanceMarker(a));
+  async loadAmbulances(showAll) {
+    // Initial Load
+    const ambulances = await DB.getAmbulances();
+    ambulances.forEach(a => {
+      if (showAll || a.status !== 'off_duty') this.upsertAmbulanceMarker(a);
+    });
+
+    // Listen for real-time updates
+    db.collection(DB.K.AMBULANCES).onSnapshot(snap => {
+      snap.docChanges().forEach(change => {
+        const a = change.doc.data();
+        if (change.type === 'removed' || (a.status === 'off_duty' && !showAll)) {
+          this.removeAmbulanceMarker(a.id);
+        } else {
+          this.upsertAmbulanceMarker(a);
+        }
+      });
+    });
   },
 
   upsertAmbulanceMarker(a) {
@@ -76,9 +101,9 @@ const MapManager = {
     if (this.ambulanceMarkers[id]) { this.map.removeLayer(this.ambulanceMarkers[id]); delete this.ambulanceMarkers[id]; }
   },
 
-  moveAmbulanceTo(id, lat, lng) {
+  async moveAmbulanceTo(id, lat, lng) {
     if (this.ambulanceMarkers[id]) this.ambulanceMarkers[id].setLatLng([lat, lng]);
-    else { const a = DB.getAmbulanceById(id); if(a) { a.lat=lat; a.lng=lng; this.upsertAmbulanceMarker(a); } }
+    else { const a = await DB.getAmbulanceById(id); if(a) { a.lat=lat; a.lng=lng; this.upsertAmbulanceMarker(a); } }
   },
 
   _ambulanceIcon(status) {
@@ -140,8 +165,8 @@ const MapManager = {
 
   invalidate() { if(this.map) setTimeout(()=>this.map.invalidateSize(),200); },
 
-  getNearestHospital(lat, lng) {
-    const hospitals = DB.getHospitals().filter(h=>h.erStatus!=='full' && h.availableBeds>0);
+  async getNearestHospital(lat, lng) {
+    const hospitals = (await DB.getHospitals()).filter(h=>h.erStatus!=='full' && h.availableBeds>0);
     if (!hospitals.length) return null;
     return hospitals.reduce((best,h) => {
       const d = DB.distKm(lat, lng, h.lat, h.lng);
@@ -149,12 +174,13 @@ const MapManager = {
     }, null);
   },
 
-  getNearestAvailableAmbulance(lat, lng) {
-    const ambs = DB.getAmbulances().filter(a=>a.status==='available');
+  async getNearestAvailableAmbulance(lat, lng) {
+    const ambs = (await DB.getAmbulances()).filter(a=>a.status==='available');
     if (!ambs.length) return null;
     return ambs.reduce((best,a) => {
       const d = DB.distKm(lat, lng, a.lat, a.lng);
       return (!best || d < best.dist) ? {...a, dist:d} : best;
     }, null);
   }
+
 };

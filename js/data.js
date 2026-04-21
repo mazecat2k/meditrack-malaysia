@@ -1,48 +1,141 @@
-// data.js — Central data store (localStorage-based)
+// data.js — Central data store (Firebase Firestore)
 const GEMINI_API_KEY = 'AIzaSyDXI0NhtWw3-FviQ-PXjh6o7lmXeeaa2pU';
 
-const DB = {
-  K: { USERS:'hmt_users', HOSPITALS:'hmt_hospitals', AMBULANCES:'hmt_ambulances', EMERGENCIES:'hmt_emergencies', SESSION:'hmt_session' },
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyCNZyxbGhtg9IVS_COT62aMeNmsz0KH_80",
+  authDomain: "exercise002.firebaseapp.com",
+  projectId: "exercise002",
+  storageBucket: "exercise002.firebasestorage.app",
+  messagingSenderId: "937921025720",
+  appId: "1:937921025720:web:d90a1cfde21e966db8c64d"
+};
 
-  init() {
-    if (!localStorage.getItem(this.K.HOSPITALS))   this.saveHospitals(SEED_HOSPITALS);
-    if (!localStorage.getItem(this.K.AMBULANCES))  this.saveAmbulances(SEED_AMBULANCES);
-    if (!localStorage.getItem(this.K.USERS))       this.saveUsers(SEED_USERS);
-    if (!localStorage.getItem(this.K.EMERGENCIES)) this.saveEmergencies([]);
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const DB = {
+  K: { USERS:'users', HOSPITALS:'hospitals', AMBULANCES:'ambulances', EMERGENCIES:'emergencies', SESSION:'hmt_session' },
+
+  async init() {
+    // Check if hospitals exist, if not seed them
+    const hSnap = await db.collection(this.K.HOSPITALS).limit(1).get();
+    if (hSnap.empty) {
+      console.log('Seeding hospitals to Firebase...');
+      for (const h of SEED_HOSPITALS) await db.collection(this.K.HOSPITALS).doc(h.id).set(h);
+    }
+    
+    // Check if ambulances exist, if not seed them
+    const aSnap = await db.collection(this.K.AMBULANCES).limit(1).get();
+    if (aSnap.empty) {
+      console.log('Seeding ambulances to Firebase...');
+      for (const a of SEED_AMBULANCES) await db.collection(this.K.AMBULANCES).doc(a.id).set(a);
+    }
+
+    // users and emergencies are typically seeded as needed
+    const uSnap = await db.collection(this.K.USERS).limit(1).get();
+    if (uSnap.empty) {
+      console.log('Seeding demo users to Firebase...');
+      for (const u of SEED_USERS) await db.collection(this.K.USERS).doc(u.id).set(u);
+    }
   },
 
-  _get(k)    { try { return JSON.parse(localStorage.getItem(k)); } catch(e) { return null; } },
-  _set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
+  // ── Generic Wrapper ──────────────────────────────────────────
+  _getLocal(k)    { try { return JSON.parse(localStorage.getItem(k)); } catch(e) { return null; } },
+  _setLocal(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
 
-  getUsers()          { return this._get(this.K.USERS) || []; },
-  saveUsers(u)        { this._set(this.K.USERS, u); },
-  getUserByEmail(e)   { return this.getUsers().find(u => u.email.toLowerCase() === e.toLowerCase()); },
-  getUserById(id)     { return this.getUsers().find(u => u.id === id); },
-  addUser(u)          { const users = this.getUsers(); users.push(u); this.saveUsers(users); },
-  updateUser(id, upd) { const arr = this.getUsers(); const i = arr.findIndex(u=>u.id===id); if(i!==-1){arr[i]={...arr[i],...upd};this.saveUsers(arr);return arr[i];} },
+  // ── User Methods ─────────────────────────────────────────────
+  async getUsers() {
+    const snap = await db.collection(this.K.USERS).get();
+    return snap.docs.map(d => d.data());
+  },
+  async getUserByEmail(email) {
+    const snap = await db.collection(this.K.USERS).where('email', '==', email.toLowerCase()).get();
+    return snap.empty ? null : snap.docs[0].data();
+  },
+  async getUserById(id) {
+    const doc = await db.collection(this.K.USERS).doc(id).get();
+    return doc.exists ? doc.data() : null;
+  },
+  async addUser(u) {
+    await db.collection(this.K.USERS).doc(u.id).set(u);
+  },
+  async updateUser(id, upd) {
+    await db.collection(this.K.USERS).doc(id).update(upd);
+    return this.getUserById(id);
+  },
 
-  getHospitals()         { return this._get(this.K.HOSPITALS) || []; },
-  saveHospitals(h)       { this._set(this.K.HOSPITALS, h); },
-  getHospitalById(id)    { return this.getHospitals().find(h => h.id === id); },
-  updateHospital(id,upd) { const arr=this.getHospitals(); const i=arr.findIndex(h=>h.id===id); if(i!==-1){arr[i]={...arr[i],...upd};this.saveHospitals(arr);return arr[i];} },
+  // ── Hospital Methods ─────────────────────────────────────────
+  async getHospitals() {
+    const snap = await db.collection(this.K.HOSPITALS).get();
+    return snap.docs.map(d => d.data());
+  },
+  async getHospitalById(id) {
+    const doc = await db.collection(this.K.HOSPITALS).doc(id).get();
+    return doc.exists ? doc.data() : null;
+  },
+  async updateHospital(id, upd) {
+    await db.collection(this.K.HOSPITALS).doc(id).update(upd);
+    return this.getHospitalById(id);
+  },
 
-  getAmbulances()              { return this._get(this.K.AMBULANCES) || []; },
-  saveAmbulances(a)            { this._set(this.K.AMBULANCES, a); },
-  getAmbulanceById(id)         { return this.getAmbulances().find(a => a.id === id); },
-  getAmbulanceByDriver(dId)    { return this.getAmbulances().find(a => a.driverId === dId); },
-  updateAmbulance(id,upd)      { const arr=this.getAmbulances(); const i=arr.findIndex(a=>a.id===id); if(i!==-1){arr[i]={...arr[i],...upd};this.saveAmbulances(arr);return arr[i];} },
-  addAmbulance(a)              { const arr=this.getAmbulances(); arr.push(a); this.saveAmbulances(arr); },
+  // ── Ambulance Methods ────────────────────────────────────────
+  async getAmbulances() {
+    const snap = await db.collection(this.K.AMBULANCES).get();
+    return snap.docs.map(d => d.data());
+  },
+  async getAmbulanceById(id) {
+    const doc = await db.collection(this.K.AMBULANCES).doc(id).get();
+    return doc.exists ? doc.data() : null;
+  },
+  async getAmbulanceByDriver(dId) {
+    const snap = await db.collection(this.K.AMBULANCES).where('driverId', '==', dId).get();
+    return snap.empty ? null : snap.docs[0].data();
+  },
+  async updateAmbulance(id, upd) {
+    await db.collection(this.K.AMBULANCES).doc(id).update(upd);
+    return this.getAmbulanceById(id);
+  },
+  async addAmbulance(a) {
+    await db.collection(this.K.AMBULANCES).doc(a.id).set(a);
+  },
 
-  getEmergencies()           { return this._get(this.K.EMERGENCIES) || []; },
-  saveEmergencies(e)         { this._set(this.K.EMERGENCIES, e); },
-  getEmergencyById(id)       { return this.getEmergencies().find(e=>e.id===id); },
-  addEmergency(e)            { const arr=this.getEmergencies(); arr.push(e); this.saveEmergencies(arr); return e; },
-  updateEmergency(id,upd)    { const arr=this.getEmergencies(); const i=arr.findIndex(e=>e.id===id); if(i!==-1){arr[i]={...arr[i],...upd};this.saveEmergencies(arr);return arr[i];} },
-  getActiveByPatient(pId)    { return this.getEmergencies().find(e=>e.patientId===pId&&['pending','dispatched','arrived','en_route'].includes(e.status)); },
-  getActiveByAmbulance(aId)  { return this.getEmergencies().find(e=>e.ambulanceId===aId&&['pending','dispatched','arrived','en_route'].includes(e.status)); },
+  // ── Emergency Methods ────────────────────────────────────────
+  async getEmergencies() {
+    const snap = await db.collection(this.K.EMERGENCIES).get();
+    return snap.docs.map(d => d.data());
+  },
+  async getEmergencyById(id) {
+    const doc = await db.collection(this.K.EMERGENCIES).doc(id).get();
+    return doc.exists ? doc.data() : null;
+  },
+  async addEmergency(e) {
+    await db.collection(this.K.EMERGENCIES).doc(e.id).set(e);
+    return e;
+  },
+  async updateEmergency(id, upd) {
+    await db.collection(this.K.EMERGENCIES).doc(id).update(upd);
+    return this.getEmergencyById(id);
+  },
+  async getActiveByPatient(pId) {
+    const snap = await db.collection(this.K.EMERGENCIES)
+      .where('patientId', '==', pId)
+      .where('status', 'in', ['pending','dispatched','arrived','en_route'])
+      .get();
+    return snap.empty ? null : snap.docs[0].data();
+  },
+  async getActiveByAmbulance(aId) {
+    const snap = await db.collection(this.K.EMERGENCIES)
+      .where('ambulanceId', '==', aId)
+      .where('status', 'in', ['pending','dispatched','arrived','en_route'])
+      .get();
+    return snap.empty ? null : snap.docs[0].data();
+  },
 
-  getSession()   { return this._get(this.K.SESSION); },
-  setSession(u)  { this._set(this.K.SESSION, u); },
+  // ── Session (Stays in LocalStorage for persistence) ──────────
+  getSession()   { return this._getLocal(this.K.SESSION); },
+  setSession(u)  { this._setLocal(this.K.SESSION, u); },
   clearSession() { localStorage.removeItem(this.K.SESSION); },
 
   genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,5); },
@@ -90,3 +183,4 @@ const SEED_USERS = [
   { id:'demo_hospital',  name:'Dr. Lim Wei Jian (Demo)',     email:'hospital@demo.com',  password:'demo123', role:'hospital',   hospitalId:'h1', createdAt:Date.now() },
   { id:'demo_ambulance', name:'Rajan Saminathan (Demo)',     email:'ambulance@demo.com', password:'demo123', role:'ambulance',  ambulanceId:'a1', createdAt:Date.now() }
 ];
+
