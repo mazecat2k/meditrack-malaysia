@@ -1,5 +1,5 @@
 // patient.js — Patient Dashboard Logic
-const PatientDash = {
+window.PatientDash = {
   user: null,
   userLat: 3.1412, userLng: 101.6865,
   activeEmergency: null,

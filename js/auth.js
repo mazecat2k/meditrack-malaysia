@@ -1,5 +1,5 @@
 // auth.js — Authentication & Session Management
-const Auth = {
+window.Auth = {
   async login(email, password) {
     const user = await DB.getUserByEmail(email);
     if (!user) return { success:false, error:'No account found with this email.' };

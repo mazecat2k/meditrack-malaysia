@@ -1,5 +1,5 @@
 // app.js — Main App Controller
-const Toast = {
+window.Toast = {
   show(msg, type='info', duration=3500) {
     const container = document.getElementById('toast-container') || (() => { const d=document.createElement('div'); d.id='toast-container'; document.body.appendChild(d); return d; })();
     const toast = document.createElement('div');
@@ -11,7 +11,7 @@ const Toast = {
   }
 };
 
-const App = {
+window.App = {
   user: null,
 
   async init() {
@@ -63,4 +63,4 @@ const App = {
   }
 };
 
-window.addEventListener('DOMContentLoaded', () => App.init());
+// window.addEventListener('DOMContentLoaded', () => App.init());

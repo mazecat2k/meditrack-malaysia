@@ -1,5 +1,5 @@
 // hospital.js — Hospital Authority Dashboard
-const HospitalDash = {
+window.HospitalDash = {
   user: null,
   hospital: null,
   emergencyListener: null,

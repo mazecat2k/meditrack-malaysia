@@ -1,5 +1,5 @@
 // map.js — Leaflet Map Management
-const MapManager = {
+window.MapManager = {
   map: null,
   hospitalMarkers: {},
   ambulanceMarkers: {},

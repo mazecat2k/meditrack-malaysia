@@ -74,12 +74,18 @@ const DB = {
   },
 
   // Auth & Session
-  getSession() { return localStorage.getItem(this.K.SESSION); },
+  getSession() {
+    try { return JSON.parse(localStorage.getItem(this.K.SESSION)); } catch(e) { return null; }
+  },
+
+  setSession(user) { localStorage.setItem(this.K.SESSION, JSON.stringify(user)); },
+
+  clearSession() { localStorage.removeItem(this.K.SESSION); },
 
   async getSessionUser() {
-    const sid = localStorage.getItem(this.K.SESSION);
-    if (!sid) return null;
-    const userDoc = await getDoc(doc(db, this.K.USERS, sid));
+    const s = this.getSession();
+    if (!s) return null;
+    const userDoc = await getDoc(doc(db, this.K.USERS, s.id));
     return userDoc.exists() ? userDoc.data() : null;
   },
 
@@ -165,6 +171,16 @@ const DB = {
   async getUserById(id) {
     const d = await getDoc(doc(db, this.K.USERS, id));
     return d.exists() ? d.data() : null;
+  },
+
+  async addUser(user) {
+    await setDoc(doc(db, this.K.USERS, user.id), user);
+  },
+
+  async getUserByEmail(email) {
+    const q = query(collection(db, this.K.USERS), where('email','==',email.toLowerCase()), limit(1));
+    const snap = await getDocs(q);
+    return snap.empty ? null : snap.docs[0].data();
   },
 
   async addAmbulance(a) {

@@ -1,5 +1,5 @@
 // chatbot.js — Gemini AI Medical Assistant
-const Chatbot = {
+window.Chatbot = {
   isOpen: false,
   isTyping: false,
   messages: [],

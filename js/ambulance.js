@@ -1,5 +1,5 @@
 // ambulance.js — Ambulance Driver Dashboard
-const AmbulanceDash = {
+window.AmbulanceDash = {
   user: null,
   ambulance: null,
   emergency: null,
