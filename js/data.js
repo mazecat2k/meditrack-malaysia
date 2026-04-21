@@ -31,101 +31,90 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 let db;
 
+// Collection keys (defined before connectToDatabase so there's no TDZ issue)
+const COLLECTIONS = {
+  USERS: 'users_v2',
+  HOSPITALS: 'hospitals_v2',
+  AMBULANCES: 'ambulances_v2',
+  EMERGENCIES: 'emergencies_v2',
+  SESSION: 'hmt_session_v2'
+};
+
 async function connectToDatabase() {
   const dbIds = ['(default)', 'final-test', 'meditest0001'];
   for (const id of dbIds) {
     try {
-      console.log(`Attempting connection to database: ${id}...`);
+      console.log(`[DB] Trying database: "${id}"...`);
       const testDb = getFirestore(app, id);
-      const testRef = collection(testDb, DB.K.HOSPITALS);
-      await getDocsFromServer(query(testRef, limit(1)));
-      console.log(`✅ Success! Connected to database: ${id}`);
+      await getDocsFromServer(query(collection(testDb, COLLECTIONS.HOSPITALS), limit(1)));
+      console.log(`[DB] ✅ Connected to database: "${id}"`);
       return testDb;
     } catch (e) {
-      console.warn(`❌ Failed to connect to database: ${id}`, e.message);
+      console.warn(`[DB] ❌ "${id}" failed:`, e.code || e.message);
     }
   }
-  throw new Error('Could not connect to any available Firestore database.');
+  throw new Error('Could not connect to any Firestore database.');
 }
 
-// Global DB wrapper initialization
+// ─── DB Object ──────────────────────────────────────────────────
 const DB = {
-  K: { USERS:'users_v2', HOSPITALS:'hospitals_v2', AMBULANCES:'ambulances_v2', EMERGENCIES:'emergencies_v2', SESSION:'hmt_session_v2' },
+  K: COLLECTIONS,
 
   async init() {
     try {
-      console.log('--- Firebase Health Check ---');
+      console.log('[DB] --- Firebase Health Check ---');
       db = await connectToDatabase();
       
       // Auto-seed hospitals if empty
-      const hRef = collection(db, this.K.HOSPITALS);
-      const hSnap = await getDocs(query(hRef, limit(1)));
-      
+      const hSnap = await getDocs(query(collection(db, this.K.HOSPITALS), limit(1)));
       if (hSnap.empty) {
-        console.log('Database connected but HOSPITALS collection is empty. Seeding...');
-        for (const h of SEED_HOSPITALS) await setDoc(doc(db, this.K.HOSPITALS, h.id), h);
+        console.log('[DB] Seeding hospitals...');
+        for (const h of SEED_HOSPITALS) {
+          await setDoc(doc(db, this.K.HOSPITALS, h.id), h);
+        }
+        console.log(`[DB] Seeded ${SEED_HOSPITALS.length} hospitals`);
       } else {
-        console.log('Database connected successfully. Hospitals found.');
+        console.log('[DB] Hospitals already seeded.');
       }
       
       // Auto-seed ambulances if empty
-      const aRef = collection(db, this.K.AMBULANCES);
-      const aSnap = await getDocs(query(aRef, limit(1)));
+      const aSnap = await getDocs(query(collection(db, this.K.AMBULANCES), limit(1)));
       if (aSnap.empty) {
-        console.log('Seeding ambulances...');
-        for (const a of SEED_AMBULANCES) await setDoc(doc(db, this.K.AMBULANCES, a.id), a);
+        console.log('[DB] Seeding ambulances...');
+        for (const a of SEED_AMBULANCES) {
+          await setDoc(doc(db, this.K.AMBULANCES, a.id), a);
+        }
+        console.log(`[DB] Seeded ${SEED_AMBULANCES.length} ambulances`);
       }
       
+      console.log('[DB] ✅ Init complete');
     } catch (err) {
-      console.error('--- FIREBASE CONNECTION FATAL ERROR ---');
-      console.error('Code:', err.code);
-      console.error('Message:', err.message);
-      
-      if (err.code === 'not-found') {
-        alert('CRITICAL ERROR: Firestore database "(default)" not found in project exercise002. Please ensure Firestore is enabled in Native Mode.');
-      } else if (err.code === 'permission-denied') {
-        alert('PERMISSION DENIED: Firestore security rules are blocking access. Please check your rules in the Firebase Console.');
-      } else {
-        alert('DATABSE ERROR: ' + err.message);
-      }
+      console.error('[DB] FATAL:', err.code, err.message);
+      alert('Database error: ' + err.message);
       throw err;
     }
   },
 
-  // Auth & Session
+  // ─── Auth & Session ─────────────────────────────────────────
   getSession() {
     try { return JSON.parse(localStorage.getItem(this.K.SESSION)); } catch(e) { return null; }
   },
-
   setSession(user) { localStorage.setItem(this.K.SESSION, JSON.stringify(user)); },
-
   clearSession() { localStorage.removeItem(this.K.SESSION); },
 
   async getSessionUser() {
     const s = this.getSession();
     if (!s) return null;
-    const userDoc = await getDoc(doc(db, this.K.USERS, s.id));
-    return userDoc.exists() ? userDoc.data() : null;
+    try {
+      const userDoc = await getDoc(doc(db, this.K.USERS, s.id));
+      return userDoc.exists() ? userDoc.data() : s; // fallback to session data
+    } catch(e) {
+      console.warn('[DB] getSessionUser failed, using cached session:', e.message);
+      return s;
+    }
   },
 
-  async login(email, password) {
-    const q = query(collection(db, this.K.USERS), where('email','==',email), where('password','==',password), limit(1));
-    const snap = await getDocs(q);
-    if (snap.empty) throw new Error('Invalid email or password');
-    const user = snap.docs[0].data();
-    localStorage.setItem(this.K.SESSION, user.id);
-    return user;
-  },
-
-  async register(user) {
-    await setDoc(doc(db, this.K.USERS, user.id), user);
-    localStorage.setItem(this.K.SESSION, user.id);
-    return user;
-  },
-
-  logout() { localStorage.removeItem(this.K.SESSION); },
-
-  // Data Getters
+  // ─── Data Getters ───────────────────────────────────────────
   async getHospitals() {
     const snap = await getDocs(collection(db, this.K.HOSPITALS));
     return snap.docs.map(d => d.data());
@@ -136,47 +125,14 @@ const DB = {
     return snap.docs.map(d => d.data());
   },
 
-  // State Updates
-  async updateHospital(id, updates) {
-    await updateDoc(doc(db, this.K.HOSPITALS, id), updates);
-  },
-
-  async updateAmbulance(id, updates) {
-    await updateDoc(doc(db, this.K.AMBULANCES, id), updates);
-  },
-
-  // Emergency Management
-  async createEmergency(data) {
-    const docRef = await addDoc(collection(db, this.K.EMERGENCIES), {
-      ...data,
-      status: 'pending',
-      createdAt: Date.now()
-    });
-    // Add the generated ID to the document
-    await updateDoc(docRef, { id: docRef.id });
-    return docRef.id;
-  },
-
-  async getEmergency(id) {
-    const d = await getDoc(doc(db, this.K.EMERGENCIES, id));
-    return d.exists() ? d.data() : null;
-  },
-
-  async updateEmergency(id, updates) {
-    await updateDoc(doc(db, this.K.EMERGENCIES, id), updates);
-  },
-
-  async getEmergencies() {
-    const snap = await getDocs(collection(db, this.K.EMERGENCIES));
-    return snap.docs.map(d => d.data());
-  },
-
   async getHospitalById(id) {
+    if (!id) return null;
     const d = await getDoc(doc(db, this.K.HOSPITALS, id));
     return d.exists() ? d.data() : null;
   },
 
   async getAmbulanceById(id) {
+    if (!id) return null;
     const d = await getDoc(doc(db, this.K.AMBULANCES, id));
     return d.exists() ? d.data() : null;
   },
@@ -188,12 +144,9 @@ const DB = {
   },
 
   async getUserById(id) {
+    if (!id) return null;
     const d = await getDoc(doc(db, this.K.USERS, id));
     return d.exists() ? d.data() : null;
-  },
-
-  async addUser(user) {
-    await setDoc(doc(db, this.K.USERS, user.id), user);
   },
 
   async getUserByEmail(email) {
@@ -202,12 +155,40 @@ const DB = {
     return snap.empty ? null : snap.docs[0].data();
   },
 
+  // ─── Data Mutations ─────────────────────────────────────────
+  async addUser(user) {
+    await setDoc(doc(db, this.K.USERS, user.id), user);
+  },
+
   async addAmbulance(a) {
     await setDoc(doc(db, this.K.AMBULANCES, a.id), a);
   },
 
   async addEmergency(e) {
     await setDoc(doc(db, this.K.EMERGENCIES, e.id), e);
+  },
+
+  async updateHospital(id, updates) {
+    await updateDoc(doc(db, this.K.HOSPITALS, id), updates);
+  },
+
+  async updateAmbulance(id, updates) {
+    await updateDoc(doc(db, this.K.AMBULANCES, id), updates);
+  },
+
+  async updateEmergency(id, updates) {
+    await updateDoc(doc(db, this.K.EMERGENCIES, id), updates);
+  },
+
+  async getEmergencies() {
+    const snap = await getDocs(collection(db, this.K.EMERGENCIES));
+    return snap.docs.map(d => d.data());
+  },
+
+  async getEmergency(id) {
+    if (!id) return null;
+    const d = await getDoc(doc(db, this.K.EMERGENCIES, id));
+    return d.exists() ? d.data() : null;
   },
 
   async getEmergencyById(id) { return this.getEmergency(id); },
@@ -226,7 +207,7 @@ const DB = {
     return active.length ? active[0] : null;
   },
 
-  // Real-time Listeners (Exposed via the global DB object)
+  // ─── Real-time Listeners ────────────────────────────────────
   subscribe(colName, callback) {
     return onSnapshot(collection(db, colName), (snap) => {
       callback(snap.docs.map(d => d.data()));
@@ -250,6 +231,7 @@ const DB = {
     });
   },
 
+  // ─── Utilities ──────────────────────────────────────────────
   genId() { return Math.random().toString(36).substr(2, 9); },
 
   distKm(lat1, lon1, lat2, lon2) {
@@ -263,13 +245,8 @@ const DB = {
   }
 };
 
-// Seed Data
+// ─── Seed Data ────────────────────────────────────────────────
 const SEED_HOSPITALS = [
-  { id: 'hkl', name: 'Hospital Kuala Lumpur (HKL)', lat: 3.1714, lng: 101.7018, beds: 15, totalBeds: 50, status: 'Open', contact: '+60 3-2615 5555', address: 'Jalan Pahang, 50586 Kuala Lumpur' },
-  { id: 'hselayang', name: 'Hospital Selayang', lat: 3.2424, lng: 101.6508, beds: 8, totalBeds: 40, status: 'Open', contact: '+60 3-6126 3333', address: 'Lebuhraya Selayang-Kepong, 68100 Batu Caves' },
-  { id: 'hsglh', name: 'Hospital Sungai Buloh', lat: 3.2201, lng: 101.5833, beds: 2, totalBeds: 60, status: 'Limited', contact: '+60 3-6145 4333', address: 'Jalan Hospital, 47000 Sungai Buloh' },
-  { id: 'hpj', name: 'University Malaya Medical Centre (PPUM)', lat: 3.1147, lng: 101.6521, beds: 0, totalBeds: 45, status: 'Full', contact: '+60 3-7949 4422', address: 'Lembah Pantai, 59100 Kuala Lumpur' },
-  { id: 'hserdang', name: 'Hospital Serdang', lat: 2.9774, lng: 101.7186, beds: 12, totalBeds: 40, status: 'Open', contact: '+60 3-8947 5555', address: 'Jalan Puchong-Dengkil, 43000 Kajang' },
   // Kuala Lumpur
   { id: 'hkl', name: 'Hospital Kuala Lumpur', shortName: 'HKL', lat: 3.1714, lng: 101.7018, availableBeds: 45, totalBeds: 2300, erStatus: 'limited', phone: '+60 3-2615 5555', address: 'Jalan Pahang, 50586 Kuala Lumpur', city: 'Kuala Lumpur', type: 'public' },
   { id: 'ppum', name: 'Pusat Perubatan Universiti Malaya', shortName: 'PPUM', lat: 3.1121, lng: 101.6534, availableBeds: 22, totalBeds: 1600, erStatus: 'open', phone: '+60 3-7949 4422', address: 'Jalan Universiti, 59100 Kuala Lumpur', city: 'Kuala Lumpur', type: 'public' },
@@ -321,9 +298,9 @@ const SEED_HOSPITALS = [
 ];
 
 const SEED_AMBULANCES = [
-  { id: 'amb-db-1', name: 'Alpha Unit (Demo)', vehicleNo: 'WNM 1010', status: 'available', lat: 3.1714, lng: 101.7018 },
-  { id: 'amb-db-2', name: 'Bravo Unit (Demo)', vehicleNo: 'VAA 2233', status: 'available', lat: 3.1500, lng: 101.7100 },
-  { id: 'amb-db-3', name: 'Charlie Unit (Demo)', vehicleNo: 'BKP 505', status: 'available', lat: 3.1147, lng: 101.6521 }
+  { id: 'amb-db-1', name: 'Alpha Unit (Demo)', vehicleNo: 'WNM 1010', status: 'available', lat: 3.1714, lng: 101.7018, driverId: null, currentEmergencyId: null },
+  { id: 'amb-db-2', name: 'Bravo Unit (Demo)', vehicleNo: 'VAA 2233', status: 'available', lat: 3.1500, lng: 101.7100, driverId: null, currentEmergencyId: null },
+  { id: 'amb-db-3', name: 'Charlie Unit (Demo)', vehicleNo: 'BKP 505', status: 'available', lat: 3.1147, lng: 101.6521, driverId: null, currentEmergencyId: null }
 ];
 
 // Export to window for non-module scripts

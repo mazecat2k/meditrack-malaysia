@@ -15,13 +15,26 @@ window.App = {
   user: null,
 
   async init() {
-    await DB.init();
-    this.user = await Auth.requireAuth();
-    if (!this.user) return;
-    this._setUserInfo();
-    MapManager.init('map');
-    await this._loadDashboard();
-    this._bindNav();
+    try {
+      console.log('[App] Starting init...');
+      await DB.init();
+      console.log('[App] DB ready. Checking auth...');
+      this.user = await Auth.requireAuth();
+      if (!this.user) { console.log('[App] No user, redirecting.'); return; }
+      console.log('[App] User:', this.user.name, '(' + this.user.role + ')');
+      this._setUserInfo();
+      console.log('[App] Initializing map...');
+      MapManager.init('map');
+      console.log('[App] Loading dashboard...');
+      await this._loadDashboard();
+      console.log('[App] Binding nav...');
+      this._bindNav();
+      console.log('[App] ✅ Init complete!');
+    } catch(err) {
+      console.error('[App] ❌ INIT FAILED:', err);
+      const panel = document.getElementById('side-panel');
+      if (panel) panel.innerHTML = `<div style="padding:20px;color:#f44"><h3>⚠️ Error</h3><p>${err.message}</p><pre style="font-size:11px;overflow:auto">${err.stack}</pre></div>`;
+    }
   },
 
   _setUserInfo() {

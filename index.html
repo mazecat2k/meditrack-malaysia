@@ -141,23 +141,32 @@
 <script type="module" src="js/auth.js"></script>
 <script type="module">
   (async () => {
-    // Wait for DB to be attached to window by the data module
     const checkDB = setInterval(async () => {
-      if (window.DB) {
+      if (window.DB && window.Auth) {
         clearInterval(checkDB);
-        await window.DB.init();
+        try {
+          console.log('[Login] DB found, initializing...');
+          await window.DB.init();
+          console.log('[Login] DB init complete');
 
-        // Populate hospital select
-        const hospSel = document.getElementById('reg-hospital');
-        const hospitals = await window.DB.getHospitals();
-        hospitals.forEach(h => {
-          const opt = document.createElement('option');
-          opt.value = h.id; opt.textContent = h.name;
-          hospSel.appendChild(opt);
-        });
+          // Populate hospital select
+          const hospSel = document.getElementById('reg-hospital');
+          const hospitals = await window.DB.getHospitals();
+          hospitals.forEach(h => {
+            const opt = document.createElement('option');
+            opt.value = h.id; opt.textContent = h.name;
+            hospSel.appendChild(opt);
+          });
+          console.log('[Login] Loaded', hospitals.length, 'hospitals');
 
-        // Redirect if already logged in
-        if (window.DB.getSession()) window.location.href = 'app.html';
+          // Redirect if already logged in
+          if (window.DB.getSession()) {
+            console.log('[Login] Session found, redirecting to app');
+            window.location.href = 'app.html';
+          }
+        } catch(err) {
+          console.error('[Login] Init error:', err);
+        }
       }
     }, 50);
   })();
@@ -185,24 +194,34 @@
   }
 
   async function doLogin() {
-    const email = document.getElementById('login-email').value.trim();
-    const pass  = document.getElementById('login-pass').value;
-    if (!email||!pass) { showError('login-error','Please fill in all fields.'); return; }
-    const result = await Auth.login(email, pass);
-    if (!result.success) { showError('login-error', result.error); return; }
-    window.location.href = 'app.html';
+    try {
+      const email = document.getElementById('login-email').value.trim();
+      const pass  = document.getElementById('login-pass').value;
+      if (!email||!pass) { showError('login-error','Please fill in all fields.'); return; }
+      const result = await Auth.login(email, pass);
+      if (!result.success) { showError('login-error', result.error); return; }
+      window.location.href = 'app.html';
+    } catch(err) {
+      console.error('[Login] doLogin error:', err);
+      showError('login-error', err.message);
+    }
   }
 
   async function doRegister() {
-    const name  = document.getElementById('reg-name').value.trim();
-    const email = document.getElementById('reg-email').value.trim();
-    const pass  = document.getElementById('reg-pass').value;
-    const hospitalId = document.getElementById('reg-hospital').value;
-    const vehicleNo  = document.getElementById('reg-vehicle').value;
-    if (pass.length > 0 && pass.length < 6) { showError('reg-error','Password must be at least 6 characters.'); return; }
-    const result = await Auth.register({ name, email, password:pass, role:selectedRole, hospitalId, vehicleNo });
-    if (!result.success) { showError('reg-error', result.error); return; }
-    window.location.href = 'app.html';
+    try {
+      const name  = document.getElementById('reg-name').value.trim();
+      const email = document.getElementById('reg-email').value.trim();
+      const pass  = document.getElementById('reg-pass').value;
+      const hospitalId = document.getElementById('reg-hospital').value;
+      const vehicleNo  = document.getElementById('reg-vehicle').value;
+      if (pass.length > 0 && pass.length < 6) { showError('reg-error','Password must be at least 6 characters.'); return; }
+      const result = await Auth.register({ name, email, password:pass, role:selectedRole, hospitalId, vehicleNo });
+      if (!result.success) { showError('reg-error', result.error); return; }
+      window.location.href = 'app.html';
+    } catch(err) {
+      console.error('[Login] doRegister error:', err);
+      showError('reg-error', err.message);
+    }
   }
 
   // Allow pressing Enter to submit
