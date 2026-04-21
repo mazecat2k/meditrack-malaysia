@@ -9,8 +9,8 @@
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <!-- App CSS -->
-  <link rel="stylesheet" href="css/dashboard.css"/>
-  <link rel="stylesheet" href="css/main.css"/>
+  <link rel="stylesheet" href="./css/dashboard.css"/>
+  <link rel="stylesheet" href="./css/main.css"/>
 </head>
 <body>
 
@@ -82,13 +82,14 @@
   }
 </script>
 
-<script type="module" src="js/data.js"></script>
-<script type="module" src="js/auth.js"></script>
-<script type="module" src="js/map.js"></script>
-<script type="module" src="js/chatbot.js"></script>
-<script type="module" src="js/patient.js"></script>
-<script type="module" src="js/hospital.js"></script>
-<script type="module" src="js/ambulance.js"></script>
+<script src="./js/config.js"></script>
+<script type="module" src="./js/data.js"></script>
+<script type="module" src="./js/auth.js"></script>
+<script type="module" src="./js/map.js"></script>
+<script type="module" src="./js/chatbot.js"></script>
+<script type="module" src="./js/patient.js"></script>
+<script type="module" src="./js/hospital.js"></script>
+<script type="module" src="./js/ambulance.js"></script>
 <script type="module">
   (async () => {
     const checkDB = setInterval(async () => {
@@ -100,7 +101,7 @@
     }, 50);
   })();
 </script>
-<script src="js/app.js"></script>
+<script src="./js/app.js"></script>
 
 </body>
 </html>

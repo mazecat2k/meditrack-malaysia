@@ -25,9 +25,12 @@ window.PatientDash = {
 
   async _locateUser() {
     try {
-      const pos = await MapManager.getUserLocation();
+      Toast.show('Acquiring your exact location...', 'info');
+      const pos = await MapManager.getUserLocation(true);
       this.userLat = pos.lat; this.userLng = pos.lng;
-    } catch(e) {}
+    } catch(e) {
+      Toast.show('Location access needed for accuracy. Using default.', 'warn');
+    }
     
     // Spawn local ambulances if there are less than 3 within 30km (for Demo)
     const ambs = await DB.getAmbulances();
@@ -140,8 +143,38 @@ window.PatientDash = {
 
   async callAmbulance() {
     if (this.activeEmergency) { Toast.show('You already have an active emergency!','warn'); return; }
+    
+    Toast.show('Acquiring your exact location... Please allow location access.', 'info');
+    const btn = document.getElementById('sos-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="sos-icon">📍</span><span>LOCATING...</span>';
+    }
+
+    try {
+      const pos = await MapManager.getUserLocation(true);
+      this.userLat = pos.lat;
+      this.userLng = pos.lng;
+      MapManager.setPatientMarker(this.userLat, this.userLng, '📍 You');
+      MapManager.panTo(this.userLat, this.userLng, 15);
+    } catch (e) {
+      Toast.show('Location access needed to call an ambulance. Please enable it in your browser.', 'error');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="sos-icon">🚨</span><span>CALL AMBULANCE</span>';
+      }
+      return;
+    }
+
     const ambulance = await MapManager.getNearestAvailableAmbulance(this.userLat, this.userLng);
-    if (!ambulance) { Toast.show('No ambulances available right now. Please call 999 directly.','error'); return; }
+    if (!ambulance) { 
+      Toast.show('No ambulances available right now. Please call 999 directly.','error'); 
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="sos-icon">🚨</span><span>CALL AMBULANCE</span>';
+      }
+      return; 
+    }
     
     const emergency = {
       id: DB.genId(), patientId: this.user.id, ambulanceId: ambulance.id,

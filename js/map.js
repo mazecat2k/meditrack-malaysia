@@ -151,10 +151,21 @@ window.MapManager = {
   // ── Utilities ─────────────────────────────────────────────────
   panTo(lat, lng, zoom) { this.map.setView([lat,lng], zoom||15); },
 
-  getUserLocation() {
+  getUserLocation(requireExact = false) {
     return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) { reject(new Error('Geolocation not supported')); return; }
-      navigator.geolocation.getCurrentPosition(p => resolve({ lat:p.coords.latitude, lng:p.coords.longitude }), () => resolve({ lat:3.1412, lng:101.6865 }));
+      if (!navigator.geolocation) {
+        if (requireExact) reject(new Error('Geolocation not supported'));
+        else resolve({ lat: 3.1412, lng: 101.6865 });
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+        err => {
+          if (requireExact) reject(err);
+          else resolve({ lat: 3.1412, lng: 101.6865 });
+        },
+        requireExact ? { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 } : undefined
+      );
     });
   },
 

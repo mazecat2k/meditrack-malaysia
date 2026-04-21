@@ -34,7 +34,7 @@ window.Auth = {
     return { success:true, user };
   },
 
-  logout() { DB.clearSession(); window.location.href='index.html'; },
+  logout() { DB.clearSession(); window.location.href = './index.html'; },
 
   async requireAuth() {
     const s = DB.getSession();

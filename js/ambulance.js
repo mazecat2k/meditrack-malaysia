@@ -10,6 +10,19 @@ window.AmbulanceDash = {
     this.user = user;
     this.ambulance = await DB.getAmbulanceByDriver(user.id);
     if (!this.ambulance) { Toast.show('No ambulance linked to your account.','error'); return; }
+    
+    Toast.show('Acquiring your exact location...', 'info');
+    try {
+      const pos = await MapManager.getUserLocation(true);
+      if (this.ambulance.lat !== pos.lat || this.ambulance.lng !== pos.lng) {
+        await DB.updateAmbulance(this.ambulance.id, { lat: pos.lat, lng: pos.lng });
+        this.ambulance.lat = pos.lat;
+        this.ambulance.lng = pos.lng;
+      }
+    } catch (e) {
+      Toast.show('Location access needed to set your initial position. Please enable it in your browser.', 'error');
+    }
+
     this.emergency = await DB.getActiveByAmbulance(this.ambulance.id);
     
     // Subscribe to marker updates (now handled in map.js load functions)
@@ -150,7 +163,7 @@ window.AmbulanceDash = {
 
   async updateLocation() {
     try {
-      const pos = await MapManager.getUserLocation();
+      const pos = await MapManager.getUserLocation(true);
       await DB.updateAmbulance(this.ambulance.id, { lat:pos.lat, lng:pos.lng });
       this.ambulance = await DB.getAmbulanceByDriver(this.user.id);
       MapManager.panTo(pos.lat, pos.lng, 14);
@@ -158,7 +171,7 @@ window.AmbulanceDash = {
       if (coords) coords.textContent = `${pos.lat.toFixed(4)}°N, ${pos.lng.toFixed(4)}°E`;
       Toast.show('📍 Location updated!','success');
       if (this.emergency) await MapManager.drawRoute([pos.lat, pos.lng], [this.emergency.patientLat, this.emergency.patientLng]);
-    } catch(e) { Toast.show('Could not get location.','error'); }
+    } catch(e) { Toast.show('Location access needed to update your position. Please enable it in your browser.','error'); }
   },
 
   async markArrivedAtPatient() {
