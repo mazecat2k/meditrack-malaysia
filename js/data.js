@@ -213,24 +213,17 @@ const DB = {
   async getEmergencyById(id) { return this.getEmergency(id); },
 
   async getActiveByAmbulance(ambulanceId) {
-    const q = query(
-      collection(db, this.K.EMERGENCIES), 
-      where('ambulanceId','==',ambulanceId), 
-      where('status','not-in',['completed','cancelled']),
-      limit(1)
-    );
+    const q = query(collection(db, this.K.EMERGENCIES), where('ambulanceId','==',ambulanceId));
     const snap = await getDocs(q);
-    return snap.empty ? null : snap.docs[0].data();
+    const active = snap.docs.map(d => d.data()).filter(e => !['completed','cancelled'].includes(e.status));
+    return active.length ? active[0] : null;
   },
+
   async getActiveByPatient(patientId) {
-    const q = query(
-      collection(db, this.K.EMERGENCIES), 
-      where('patientId','==',patientId), 
-      where('status','not-in',['completed','cancelled']),
-      limit(1)
-    );
+    const q = query(collection(db, this.K.EMERGENCIES), where('patientId','==',patientId));
     const snap = await getDocs(q);
-    return snap.empty ? null : snap.docs[0].data();
+    const active = snap.docs.map(d => d.data()).filter(e => !['completed','cancelled'].includes(e.status));
+    return active.length ? active[0] : null;
   },
 
   // Real-time Listeners (Exposed via the global DB object)
@@ -249,11 +242,11 @@ const DB = {
   subscribeIncoming(hospitalId, callback) {
     const q = query(
       collection(db, this.K.EMERGENCIES),
-      where('hospitalId','==',hospitalId),
-      where('status','in',['dispatched','arrived','transporting'])
+      where('hospitalId','==',hospitalId)
     );
     return onSnapshot(q, (snap) => {
-      callback(snap.docs.map(d => d.data()));
+      const active = snap.docs.map(d => d.data()).filter(e => ['dispatched','arrived','transporting','en_route'].includes(e.status));
+      callback(active);
     });
   },
 
