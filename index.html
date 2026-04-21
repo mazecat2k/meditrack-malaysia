@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MediTrack Malaysia — Hospital Vacancy & Ambulance Tracker</title>
+  <meta name="description" content="Real-time hospital vacancy and ambulance tracker for Malaysia. Find available hospital beds and call ambulances instantly."/>
+  <link rel="stylesheet" href="css/auth.css"/>
+</head>
+<body>
+<div class="auth-bg"></div>
+
+<div class="auth-wrap">
+  <!-- Left Branding Panel -->
+  <div class="auth-left">
+    <div class="brand-logo">🏥</div>
+  <h1 class="brand-title">Malaysia <span>MediTrack</span></h1>
+    <p class="brand-sub">Real-time hospital vacancy & ambulance tracking for Malaysia. Connecting patients, hospitals, and ambulances when it matters most.</p>
+
+    <div class="feature-list">
+      <div class="feature-item">
+        <span class="feature-icon">🗺️</span>
+        <div class="feature-text"><strong>Live Hospital Map</strong><span>20+ hospitals across Malaysia with real-time vacancy status</span></div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">🚑</span>
+        <div class="feature-text"><strong>Instant Ambulance Dispatch</strong><span>One-tap emergency call with live ETA tracking</span></div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">🏥</span>
+        <div class="feature-text"><strong>Hospital Vacancy Management</strong><span>Real-time bed count and ER status updates</span></div>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">🤖</span>
+        <div class="feature-text"><strong>Gemini AI Medical Assistant</strong><span>Ask any medical question and get instant expert guidance</span></div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <div class="demo-title">⚡ Demo Accounts (password: demo123)</div>
+      <div class="demo-accounts">
+        <div class="demo-account"><strong>Patient:</strong> patient@demo.com</div>
+        <div class="demo-account"><strong>Hospital:</strong> hospital@demo.com</div>
+        <div class="demo-account"><strong>Driver:</strong> ambulance@demo.com</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Form Panel -->
+  <div class="auth-right">
+    <div class="auth-toggle-tabs">
+      <button class="tab-btn active" id="tab-login" onclick="switchTab('login')">Sign In</button>
+      <button class="tab-btn" id="tab-register" onclick="switchTab('register')">Register</button>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div class="auth-form active" id="form-login">
+      <h2 class="auth-form-title">Welcome back 👋</h2>
+      <p class="auth-form-sub">Sign in to access your dashboard</p>
+      <div id="login-error" class="auth-error"></div>
+      <div class="form-group">
+        <label for="login-email">Email Address</label>
+        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="form-group">
+        <label for="login-pass">Password</label>
+        <input type="password" id="login-pass" placeholder="Your password" autocomplete="current-password"/>
+      </div>
+      <button class="submit-btn" onclick="doLogin()">Sign In →</button>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div class="auth-form" id="form-register">
+      <h2 class="auth-form-title">Create Account</h2>
+      <p class="auth-form-sub">Register as a patient, hospital, or ambulance driver</p>
+      <div id="reg-error" class="auth-error"></div>
+
+      <div class="form-group">
+        <label>I am a…</label>
+        <div class="role-grid">
+          <div class="role-card selected" id="role-patient" onclick="selectRole('patient')">
+            <div class="role-icon">👤</div>
+            <div class="role-label">Patient / Public</div>
+          </div>
+          <div class="role-card" id="role-hospital" onclick="selectRole('hospital')">
+            <div class="role-icon">🏥</div>
+            <div class="role-label">Hospital Authority</div>
+          </div>
+          <div class="role-card" id="role-ambulance" onclick="selectRole('ambulance')">
+            <div class="role-icon">🚑</div>
+            <div class="role-label">Ambulance Driver</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="reg-name">Full Name</label>
+        <input type="text" id="reg-name" placeholder="Your full name"/>
+      </div>
+      <div class="form-group">
+        <label for="reg-email">Email Address</label>
+        <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="form-group">
+        <label for="reg-pass">Password</label>
+        <input type="password" id="reg-pass" placeholder="Create a password (min. 6 chars)"/>
+      </div>
+
+      <!-- Hospital extra fields -->
+      <div class="form-group extra-field" id="field-hospital" style="display:none">
+        <label for="reg-hospital">Select Your Hospital</label>
+        <select id="reg-hospital">
+          <option value="">— Choose hospital —</option>
+        </select>
+      </div>
+
+      <!-- Ambulance extra fields -->
+      <div class="form-group extra-field" id="field-vehicle" style="display:none">
+        <label for="reg-vehicle">Vehicle Plate Number</label>
+        <input type="text" id="reg-vehicle" placeholder="e.g. WB 1234 A"/>
+      </div>
+
+      <button class="submit-btn" onclick="doRegister()">Create Account →</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="js/data.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  DB.init();
+
+  // Populate hospital select
+  const hospSel = document.getElementById('reg-hospital');
+  DB.getHospitals().forEach(h => {
+    const opt = document.createElement('option');
+    opt.value = h.id; opt.textContent = h.name;
+    hospSel.appendChild(opt);
+  });
+
+  // Redirect if already logged in
+  if (DB.getSession()) window.location.href = 'app.html';
+
+  let selectedRole = 'patient';
+
+  function selectRole(role) {
+    selectedRole = role;
+    ['patient','hospital','ambulance'].forEach(r => document.getElementById('role-'+r).classList.toggle('selected', r===role));
+    document.getElementById('field-hospital').style.display = role==='hospital' ? 'block' : 'none';
+    document.getElementById('field-vehicle').style.display  = role==='ambulance' ? 'block' : 'none';
+  }
+
+  function switchTab(tab) {
+    document.getElementById('tab-login').classList.toggle('active', tab==='login');
+    document.getElementById('tab-register').classList.toggle('active', tab==='register');
+    document.getElementById('form-login').classList.toggle('active', tab==='login');
+    document.getElementById('form-register').classList.toggle('active', tab==='register');
+  }
+
+  function showError(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = msg; el.classList.add('show');
+    setTimeout(()=>el.classList.remove('show'), 4000);
+  }
+
+  function doLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const pass  = document.getElementById('login-pass').value;
+    if (!email||!pass) { showError('login-error','Please fill in all fields.'); return; }
+    const result = Auth.login(email, pass);
+    if (!result.success) { showError('login-error', result.error); return; }
+    window.location.href = 'app.html';
+  }
+
+  function doRegister() {
+    const name  = document.getElementById('reg-name').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const pass  = document.getElementById('reg-pass').value;
+    const hospitalId = document.getElementById('reg-hospital').value;
+    const vehicleNo  = document.getElementById('reg-vehicle').value;
+    if (pass.length > 0 && pass.length < 6) { showError('reg-error','Password must be at least 6 characters.'); return; }
+    const result = Auth.register({ name, email, password:pass, role:selectedRole, hospitalId, vehicleNo });
+    if (!result.success) { showError('reg-error', result.error); return; }
+    window.location.href = 'app.html';
+  }
+
+  // Allow pressing Enter to submit
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const loginForm = document.getElementById('form-login');
+    if (loginForm.classList.contains('active')) doLogin();
+    else doRegister();
+  });
+</script>
+</body>
+</html>

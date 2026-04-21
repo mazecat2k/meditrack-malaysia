@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MediTrack Malaysia — Dashboard</title>
+  <meta name="description" content="Malaysia hospital vacancy and ambulance tracking dashboard."/>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <!-- App CSS -->
+  <link rel="stylesheet" href="css/dashboard.css"/>
+  <link rel="stylesheet" href="css/main.css"/>
+</head>
+<body>
+
+<!-- ── Map (full-screen background) ── -->
+<div id="map"></div>
+
+<!-- ── Top Navbar ── -->
+<nav id="navbar">
+  <div class="nav-logo">
+    <span class="nav-logo-icon">🏥</span>
+    <div>
+      <span class="nav-logo-text">MediTrack</span>
+      <span class="nav-logo-sub">Malaysia</span>
+    </div>
+  </div>
+
+  <div class="nav-user">
+    <span class="nav-avatar" id="user-avatar">👤</span>
+    <div>
+      <div class="nav-name" id="user-name">Loading…</div>
+      <div class="nav-role" id="user-role"></div>
+    </div>
+  </div>
+
+  <button class="nav-btn" id="btn-toggle-panel" title="Toggle Panel">☰</button>
+  <button class="nav-btn" id="btn-center-map" title="Center Map">📍</button>
+  <button class="nav-btn" id="btn-logout" title="Logout">⏻</button>
+</nav>
+
+<!-- ── Side Panel ── -->
+<div id="side-panel">
+  <!-- Populated by role dashboard JS -->
+  <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#8b949e;">
+    <div style="text-align:center"><div style="font-size:40px;margin-bottom:12px">⏳</div>Loading dashboard…</div>
+  </div>
+</div>
+
+<!-- ── Map Bottom Controls ── -->
+<div class="map-controls">
+  <button class="map-ctrl-btn" onclick="MapManager.panTo(4.2105,109.4,6)">🇲🇾 Malaysia Overview</button>
+  <button class="map-ctrl-btn" onclick="MapManager.panTo(3.1412,101.6865,12)">📍 Kuala Lumpur</button>
+  <button class="map-ctrl-btn" onclick="MapManager.panTo(5.4159,100.3308,12)">📍 Penang</button>
+  <button class="map-ctrl-btn" onclick="MapManager.panTo(1.4655,103.7578,12)">📍 Johor Bahru</button>
+</div>
+
+<!-- ── Map Legend ── -->
+<div class="map-legend">
+  <div class="legend-title">Map Legend</div>
+  <div class="legend-item"><div class="legend-dot green"></div> Hospital — Available</div>
+  <div class="legend-item"><div class="legend-dot amber"></div> Hospital — Limited</div>
+  <div class="legend-item"><div class="legend-dot red"></div> Hospital — Full</div>
+  <div class="legend-item"><div class="legend-dot orange"></div> Ambulance — Active</div>
+</div>
+
+<!-- ── Toast Container ── -->
+<div id="toast-container"></div>
+
+<!-- ── Scripts ── -->
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- App Scripts (order matters) -->
+<script src="js/data.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/map.js"></script>
+<script src="js/chatbot.js"></script>
+<script src="js/patient.js"></script>
+<script src="js/hospital.js"></script>
+<script src="js/ambulance.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
