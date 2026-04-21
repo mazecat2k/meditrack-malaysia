@@ -28,17 +28,35 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+let db;
 
+async function connectToDatabase() {
+  const dbIds = ['(default)', 'final-test', 'meditest0001'];
+  for (const id of dbIds) {
+    try {
+      console.log(`Attempting connection to database: ${id}...`);
+      const testDb = getFirestore(app, id);
+      const testRef = collection(testDb, DB.K.HOSPITALS);
+      await getDocs(query(testRef, limit(1)));
+      console.log(`✅ Success! Connected to database: ${id}`);
+      return testDb;
+    } catch (e) {
+      console.warn(`❌ Failed to connect to database: ${id}`, e.message);
+    }
+  }
+  throw new Error('Could not connect to any available Firestore database.');
+}
+
+// Global DB wrapper initialization
 const DB = {
   K: { USERS:'users', HOSPITALS:'hospitals', AMBULANCES:'ambulances', EMERGENCIES:'emergencies', SESSION:'hmt_session' },
 
   async init() {
     try {
       console.log('--- Firebase Health Check ---');
-      console.log('Project ID:', firebaseConfig.projectId);
+      db = await connectToDatabase();
       
-      // Test connection with a simple query
+      // Auto-seed hospitals if empty
       const hRef = collection(db, this.K.HOSPITALS);
       const hSnap = await getDocs(query(hRef, limit(1)));
       
