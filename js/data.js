@@ -4,9 +4,9 @@ const GEMINI_API_KEY = window.CONFIG?.GEMINI_API_KEY || '';
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyCNZyxbGhtg9IVS_COT62aMeNmsz0KH_80",
-  authDomain: "meditrack-malaysia.firebaseapp.com",
-  projectId: "meditrack-malaysia",
-  storageBucket: "meditrack-malaysia.firebasestorage.app",
+  authDomain: "exercise002.firebaseapp.com",
+  projectId: "exercise002",
+  storageBucket: "exercise002.firebasestorage.app",
   messagingSenderId: "937921025720",
   appId: "1:937921025720:web:d90a1cfde21e966db8c64d"
 };
