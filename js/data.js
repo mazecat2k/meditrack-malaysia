@@ -12,7 +12,8 @@ import {
   where, 
   limit, 
   orderBy, 
-  onSnapshot 
+  onSnapshot,
+  getDocsFromServer
 } from "firebase/firestore";
 
 const GEMINI_API_KEY = window.CONFIG?.GEMINI_API_KEY || '';
@@ -37,7 +38,7 @@ async function connectToDatabase() {
       console.log(`Attempting connection to database: ${id}...`);
       const testDb = getFirestore(app, id);
       const testRef = collection(testDb, DB.K.HOSPITALS);
-      await getDocs(query(testRef, limit(1)));
+      await getDocsFromServer(query(testRef, limit(1)));
       console.log(`✅ Success! Connected to database: ${id}`);
       return testDb;
     } catch (e) {
