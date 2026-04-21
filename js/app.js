@@ -48,8 +48,8 @@ window.App = {
 
   async _loadDashboard() {
     const role = this.user.role;
-    // Init chatbot for all roles
-    Chatbot.init(this.user, null);
+    // Init chatbot for all roles (may not be loaded yet if module is slow)
+    if (window.Chatbot) Chatbot.init(this.user, null);
 
     if (role === 'patient') {
       await PatientDash.init(this.user);
@@ -59,6 +59,11 @@ window.App = {
       await AmbulanceDash.init(this.user);
     }
     MapManager.invalidate();
+
+    // Retry chatbot init if it wasn't ready on first try
+    if (!window.Chatbot) {
+      setTimeout(() => { if (window.Chatbot) Chatbot.init(this.user, null); }, 1000);
+    }
   },
 
   _bindNav() {
