@@ -7,6 +7,7 @@
 # Local settings
 .env
 .DS_Store
+js/config.js
 
 # Scratch files
 .gemini/
@@ -18,5 +19,4 @@ yarn-debug.log*
 yarn-error.log*
 
 # Docker stuff
-Dockerfile
-.dockerignore
+# (Moved out of ignore so gcloud can find them)
