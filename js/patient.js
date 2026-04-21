@@ -166,7 +166,7 @@ window.PatientDash = {
     this._startSimulation(ambulance.id, route.path);
     this._renderTracker(ambulance);
     const ctx = `Patient at (${this.userLat.toFixed(4)}, ${this.userLng.toFixed(4)}) called an ambulance. ${ambulance.name} (${ambulance.vehicleNo}) is on the way, ETA ~${Math.round(this.etaSeconds/60)} min. Patient will choose destination hospital after pickup.`;
-    Chatbot.updateContext(ctx);
+    if (window.Chatbot) Chatbot.updateContext(ctx);
   },
 
   _subscribeToEmergency(id) {
@@ -203,29 +203,27 @@ window.PatientDash = {
 
   _startSimulation(ambulanceId, path) {
     if (this.simInterval) clearInterval(this.simInterval);
-    const stepCount = this.etaSeconds;
+    const realEta = this.etaSeconds; // real ETA from OSRM
+    const demoSteps = Math.min(Math.max(20, Math.round(realEta / 30)), 45); // 20-45 demo steps
     let steps = 0;
 
     this.simInterval = setInterval(async () => {
       steps++;
-      // We don't fetch the whole object, just push updates if this is a "pure" simulation
-      // In a real multi-user app, the ambulance location would come from the DRIVER'S device.
-      // But for demo purposes, we'll keep simulating movement if driver isn't real.
-      
-      const pct = Math.min(1, steps / stepCount);
+      const pct = Math.min(1, steps / demoSteps);
       const pathIdx = Math.min(path.length - 1, Math.floor(pct * path.length));
       const [newLat, newLng] = path[pathIdx];
       
       // Update Firestore so the driver/others see the movement
-      await DB.updateAmbulance(ambulanceId, { lat:newLat, lng:newLng });
+      try { await DB.updateAmbulance(ambulanceId, { lat:newLat, lng:newLng }); } catch(e) { console.warn('Amb update error:', e.message); }
       
-      this.etaSeconds = Math.max(0, this.etaSeconds - 1);
+      // Show real ETA counting down proportionally
+      const remainingEta = Math.max(0, Math.round(realEta * (1 - pct)));
       const etaEl = document.getElementById('eta-display');
       const barEl = document.getElementById('tracker-bar');
-      if (etaEl) etaEl.textContent = this._fmtEta(this.etaSeconds);
-      if (barEl) { const fillPct = Math.min(100, (steps/stepCount)*100); barEl.style.width = fillPct+'%'; }
+      if (etaEl) etaEl.textContent = this._fmtEta(remainingEta);
+      if (barEl) barEl.style.width = Math.min(100, pct * 100) + '%';
       
-      if (this.etaSeconds <= 0 || steps >= stepCount) {
+      if (steps >= demoSteps) {
         clearInterval(this.simInterval);
         this._onAmbulanceArrived(ambulanceId);
       }
@@ -284,17 +282,21 @@ window.PatientDash = {
     await DB.updateEmergency(this.activeEmergency.id, upd);
     this.activeEmergency = { ...this.activeEmergency, ...upd };
     
-    Toast.show('🏥 Calculating routing...','info');
+    Toast.show('🏥 Calculating route to hospital...','info');
     const route = await MapManager.drawRoute([this.userLat, this.userLng], [hospital.lat, hospital.lng]);
-    this.etaSeconds = route.duration;
+    this.etaSeconds = route.duration; // real ETA in seconds from OSRM
     
     // Show route from patient → hospital
     MapManager.setPatientMarker(this.userLat, this.userLng, '🚑 You (in ambulance)');
     MapManager.panTo((this.userLat+hospital.lat)/2, (this.userLng+hospital.lng)/2, 11);
-    Toast.show(`🏥 Heading to ${hospital.shortName}!`, 'info');
     
     const distToHosp = DB.distKm(this.userLat, this.userLng, hospital.lat, hospital.lng);
-    Chatbot.updateContext(`Patient in ambulance heading to ${hospital.name}. Distance: ${distToHosp.toFixed(1)} km, ETA ~${Math.round(this.etaSeconds/60)} min. ER status: ${hospital.erStatus}.`);
+    const etaMin = Math.round(this.etaSeconds / 60);
+    Toast.show(`🏥 Heading to ${hospital.shortName}! ETA ~${etaMin} min`, 'info');
+    
+    if (window.Chatbot) {
+      Chatbot.updateContext(`Patient in ambulance heading to ${hospital.name}. Distance: ${distToHosp.toFixed(1)} km, ETA ~${etaMin} min. ER status: ${hospital.erStatus}.`);
+    }
     this._renderEnRouteTracker(hospital);
     this._startHospitalSim(ambulanceId, hospital, route.path);
   },
@@ -318,22 +320,28 @@ window.PatientDash = {
 
   _startHospitalSim(ambulanceId, hospital, path) {
     if (this.simInterval) clearInterval(this.simInterval);
-    const totalSeconds = this.etaSeconds;
+    const realEta = this.etaSeconds; // real ETA from OSRM
+    const demoSteps = Math.min(Math.max(20, Math.round(realEta / 30)), 45); // 20-45 demo steps
     let steps = 0;
+    
+    console.log(`[Sim] Hospital sim: ${realEta}s real ETA, compressed to ${demoSteps} demo steps`);
     
     this.simInterval = setInterval(async () => {
       steps++;
-      const pct = Math.min(1, steps / totalSeconds);
+      const pct = Math.min(1, steps / demoSteps);
       const pathIdx = Math.min(path.length - 1, Math.floor(pct * path.length));
       const [currentLat, currentLng] = path[pathIdx];
       
-      await DB.updateAmbulance(ambulanceId, { lat:currentLat, lng:currentLng });
-      this.etaSeconds = Math.max(0, totalSeconds - steps);
+      try { await DB.updateAmbulance(ambulanceId, { lat:currentLat, lng:currentLng }); } catch(e) { console.warn('Amb update error:', e.message); }
+      
+      // Show real ETA counting down proportionally
+      const remainingEta = Math.max(0, Math.round(realEta * (1 - pct)));
       const etaEl = document.getElementById('eta-display');
       const barEl = document.getElementById('tracker-bar');
-      if (etaEl) etaEl.textContent = this._fmtEta(this.etaSeconds);
-      if (barEl) barEl.style.width = Math.min(100, (steps/totalSeconds)*100) + '%';
-      if (steps >= totalSeconds) {
+      if (etaEl) etaEl.textContent = this._fmtEta(remainingEta);
+      if (barEl) barEl.style.width = Math.min(100, pct * 100) + '%';
+      
+      if (steps >= demoSteps) {
         clearInterval(this.simInterval);
         this._onHospitalArrival(ambulanceId, hospital);
       }
