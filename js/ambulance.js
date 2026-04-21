@@ -195,15 +195,14 @@ const AmbulanceDash = {
 
   _subscribeToAmbulance() {
      if (this.ambulanceListener) this.ambulanceListener();
-     this.ambulanceListener = db.collection(DB.K.AMBULANCES).doc(this.ambulance.id).onSnapshot(async doc => {
-        const data = doc.data();
+     this.ambulanceListener = DB.subscribeDoc(DB.K.AMBULANCES, this.ambulance.id, async data => {
         if (!data) return;
         
         const prevEmergencyId = this.ambulance?.currentEmergencyId;
         this.ambulance = data;
 
         if (data.currentEmergencyId && data.currentEmergencyId !== prevEmergencyId) {
-          this.emergency = await DB.getEmergencyById(data.currentEmergencyId);
+          this.emergency = await DB.getEmergency(data.currentEmergencyId);
           this._subscribeToEmergency(data.currentEmergencyId);
           this.updateDispatchUI();
           Toast.show('🚨 NEW DISPATCH RECEIVED!', 'success', 6000);
@@ -217,8 +216,7 @@ const AmbulanceDash = {
 
   _subscribeToEmergency(id) {
     if (this.emergencyListener) this.emergencyListener();
-    this.emergencyListener = db.collection(DB.K.EMERGENCIES).doc(id).onSnapshot(doc => {
-      const data = doc.data();
+    this.emergencyListener = DB.subscribeDoc(DB.K.EMERGENCIES, id, data => {
       if (!data) return;
       if (data.status !== this.emergency?.status || data.hospitalId !== this.emergency?.hospitalId) {
         this.emergency = data;

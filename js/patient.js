@@ -162,8 +162,7 @@ const PatientDash = {
 
   _subscribeToEmergency(id) {
     if (this.emergencyListener) this.emergencyListener();
-    this.emergencyListener = db.collection(DB.K.EMERGENCIES).doc(id).onSnapshot(doc => {
-      const data = doc.data();
+    this.emergencyListener = DB.subscribeDoc(DB.K.EMERGENCIES, id, data => {
       if (!data) return;
       
       // If driver marked as arrived

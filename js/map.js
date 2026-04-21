@@ -24,12 +24,8 @@ const MapManager = {
     hospitals.forEach(h => this.upsertHospitalMarker(h, onClickCb));
 
     // Listen for real-time updates
-    db.collection(DB.K.HOSPITALS).onSnapshot(snap => {
-      snap.docChanges().forEach(change => {
-        if (change.type === 'added' || change.type === 'modified') {
-          this.upsertHospitalMarker(change.doc.data(), onClickCb);
-        }
-      });
+    DB.subscribe(DB.K.HOSPITALS, hospitals => {
+      hospitals.forEach(h => this.upsertHospitalMarker(h, onClickCb));
     });
   },
 
@@ -74,13 +70,12 @@ const MapManager = {
     });
 
     // Listen for real-time updates
-    db.collection(DB.K.AMBULANCES).onSnapshot(snap => {
-      snap.docChanges().forEach(change => {
-        const a = change.doc.data();
-        if (change.type === 'removed' || (a.status === 'off_duty' && !showAll)) {
-          this.removeAmbulanceMarker(a.id);
-        } else {
+    DB.subscribe(DB.K.AMBULANCES, ambulances => {
+      ambulances.forEach(a => {
+        if (showAll || a.status !== 'off_duty') {
           this.upsertAmbulanceMarker(a);
+        } else {
+          this.removeAmbulanceMarker(a.id);
         }
       });
     });

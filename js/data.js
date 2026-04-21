@@ -1,7 +1,22 @@
-// data.js — Central data store (Firebase Firestore)
+import { initializeApp } from "firebase/app";
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  addDoc, 
+  updateDoc, 
+  query, 
+  where, 
+  limit, 
+  orderBy, 
+  onSnapshot 
+} from "firebase/firestore";
+
 const GEMINI_API_KEY = window.CONFIG?.GEMINI_API_KEY || '';
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyCNZyxbGhtg9IVS_COT62aMeNmsz0KH_80",
   authDomain: "exercise002.firebaseapp.com",
@@ -12,175 +27,246 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 const DB = {
   K: { USERS:'users', HOSPITALS:'hospitals', AMBULANCES:'ambulances', EMERGENCIES:'emergencies', SESSION:'hmt_session' },
 
   async init() {
-    // Check if hospitals exist, if not seed them
-    const hSnap = await db.collection(this.K.HOSPITALS).limit(1).get();
-    if (hSnap.empty) {
-      console.log('Seeding hospitals to Firebase...');
-      for (const h of SEED_HOSPITALS) await db.collection(this.K.HOSPITALS).doc(h.id).set(h);
+    try {
+      console.log('--- Firebase Health Check ---');
+      console.log('Project ID:', firebaseConfig.projectId);
+      
+      // Test connection with a simple query
+      const hRef = collection(db, this.K.HOSPITALS);
+      const hSnap = await getDocs(query(hRef, limit(1)));
+      
+      if (hSnap.empty) {
+        console.log('Database connected but HOSPITALS collection is empty. Seeding...');
+        for (const h of SEED_HOSPITALS) await setDoc(doc(db, this.K.HOSPITALS, h.id), h);
+      } else {
+        console.log('Database connected successfully. Hospitals found.');
+      }
+      
+      // Auto-seed ambulances if empty
+      const aRef = collection(db, this.K.AMBULANCES);
+      const aSnap = await getDocs(query(aRef, limit(1)));
+      if (aSnap.empty) {
+        console.log('Seeding ambulances...');
+        for (const a of SEED_AMBULANCES) await setDoc(doc(db, this.K.AMBULANCES, a.id), a);
+      }
+      
+    } catch (err) {
+      console.error('--- FIREBASE CONNECTION FATAL ERROR ---');
+      console.error('Code:', err.code);
+      console.error('Message:', err.message);
+      
+      if (err.code === 'not-found') {
+        alert('CRITICAL ERROR: Firestore database "(default)" not found in project exercise002. Please ensure Firestore is enabled in Native Mode.');
+      } else if (err.code === 'permission-denied') {
+        alert('PERMISSION DENIED: Firestore security rules are blocking access. Please check your rules in the Firebase Console.');
+      } else {
+        alert('DATABSE ERROR: ' + err.message);
+      }
+      throw err;
     }
-    
-    // Check if ambulances exist, if not seed them
-    const aSnap = await db.collection(this.K.AMBULANCES).limit(1).get();
-    if (aSnap.empty) {
-      console.log('Seeding ambulances to Firebase...');
-      for (const a of SEED_AMBULANCES) await db.collection(this.K.AMBULANCES).doc(a.id).set(a);
-    }
-
-    // users and emergencies are typically seeded as needed
-    const uSnap = await db.collection(this.K.USERS).limit(1).get();
-    if (uSnap.empty) {
-      console.log('Seeding demo users to Firebase...');
-      for (const u of SEED_USERS) await db.collection(this.K.USERS).doc(u.id).set(u);
-    }
   },
 
-  // ── Generic Wrapper ──────────────────────────────────────────
-  _getLocal(k)    { try { return JSON.parse(localStorage.getItem(k)); } catch(e) { return null; } },
-  _setLocal(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
+  // Auth & Session
+  getSession() { return localStorage.getItem(this.K.SESSION); },
 
-  // ── User Methods ─────────────────────────────────────────────
-  async getUsers() {
-    const snap = await db.collection(this.K.USERS).get();
-    return snap.docs.map(d => d.data());
-  },
-  async getUserByEmail(email) {
-    const snap = await db.collection(this.K.USERS).where('email', '==', email.toLowerCase()).get();
-    return snap.empty ? null : snap.docs[0].data();
-  },
-  async getUserById(id) {
-    const doc = await db.collection(this.K.USERS).doc(id).get();
-    return doc.exists ? doc.data() : null;
-  },
-  async addUser(u) {
-    await db.collection(this.K.USERS).doc(u.id).set(u);
-  },
-  async updateUser(id, upd) {
-    await db.collection(this.K.USERS).doc(id).update(upd);
-    return this.getUserById(id);
+  async getSessionUser() {
+    const sid = localStorage.getItem(this.K.SESSION);
+    if (!sid) return null;
+    const userDoc = await getDoc(doc(db, this.K.USERS, sid));
+    return userDoc.exists() ? userDoc.data() : null;
   },
 
-  // ── Hospital Methods ─────────────────────────────────────────
+  async login(email, password) {
+    const q = query(collection(db, this.K.USERS), where('email','==',email), where('password','==',password), limit(1));
+    const snap = await getDocs(q);
+    if (snap.empty) throw new Error('Invalid email or password');
+    const user = snap.docs[0].data();
+    localStorage.setItem(this.K.SESSION, user.id);
+    return user;
+  },
+
+  async register(user) {
+    await setDoc(doc(db, this.K.USERS, user.id), user);
+    localStorage.setItem(this.K.SESSION, user.id);
+    return user;
+  },
+
+  logout() { localStorage.removeItem(this.K.SESSION); },
+
+  // Data Getters
   async getHospitals() {
-    const snap = await db.collection(this.K.HOSPITALS).get();
+    const snap = await getDocs(collection(db, this.K.HOSPITALS));
     return snap.docs.map(d => d.data());
   },
-  async getHospitalById(id) {
-    const doc = await db.collection(this.K.HOSPITALS).doc(id).get();
-    return doc.exists ? doc.data() : null;
-  },
-  async updateHospital(id, upd) {
-    await db.collection(this.K.HOSPITALS).doc(id).update(upd);
-    return this.getHospitalById(id);
-  },
 
-  // ── Ambulance Methods ────────────────────────────────────────
   async getAmbulances() {
-    const snap = await db.collection(this.K.AMBULANCES).get();
+    const snap = await getDocs(collection(db, this.K.AMBULANCES));
     return snap.docs.map(d => d.data());
   },
-  async getAmbulanceById(id) {
-    const doc = await db.collection(this.K.AMBULANCES).doc(id).get();
-    return doc.exists ? doc.data() : null;
-  },
-  async getAmbulanceByDriver(dId) {
-    const snap = await db.collection(this.K.AMBULANCES).where('driverId', '==', dId).get();
-    return snap.empty ? null : snap.docs[0].data();
-  },
-  async updateAmbulance(id, upd) {
-    await db.collection(this.K.AMBULANCES).doc(id).update(upd);
-    return this.getAmbulanceById(id);
-  },
-  async addAmbulance(a) {
-    await db.collection(this.K.AMBULANCES).doc(a.id).set(a);
+
+  // State Updates
+  async updateHospital(id, updates) {
+    await updateDoc(doc(db, this.K.HOSPITALS, id), updates);
   },
 
-  // ── Emergency Methods ────────────────────────────────────────
+  async updateAmbulance(id, updates) {
+    await updateDoc(doc(db, this.K.AMBULANCES, id), updates);
+  },
+
+  // Emergency Management
+  async createEmergency(data) {
+    const docRef = await addDoc(collection(db, this.K.EMERGENCIES), {
+      ...data,
+      status: 'pending',
+      createdAt: Date.now()
+    });
+    // Add the generated ID to the document
+    await updateDoc(docRef, { id: docRef.id });
+    return docRef.id;
+  },
+
+  async getEmergency(id) {
+    const d = await getDoc(doc(db, this.K.EMERGENCIES, id));
+    return d.exists() ? d.data() : null;
+  },
+
+  async updateEmergency(id, updates) {
+    await updateDoc(doc(db, this.K.EMERGENCIES, id), updates);
+  },
+
   async getEmergencies() {
-    const snap = await db.collection(this.K.EMERGENCIES).get();
+    const snap = await getDocs(collection(db, this.K.EMERGENCIES));
     return snap.docs.map(d => d.data());
   },
-  async getEmergencyById(id) {
-    const doc = await db.collection(this.K.EMERGENCIES).doc(id).get();
-    return doc.exists ? doc.data() : null;
+
+  async getHospitalById(id) {
+    const d = await getDoc(doc(db, this.K.HOSPITALS, id));
+    return d.exists() ? d.data() : null;
   },
+
+  async getAmbulanceById(id) {
+    const d = await getDoc(doc(db, this.K.AMBULANCES, id));
+    return d.exists() ? d.data() : null;
+  },
+
+  async getAmbulanceByDriver(driverId) {
+    const q = query(collection(db, this.K.AMBULANCES), where('driverId','==',driverId), limit(1));
+    const snap = await getDocs(q);
+    return snap.empty ? null : snap.docs[0].data();
+  },
+
+  async getUserById(id) {
+    const d = await getDoc(doc(db, this.K.USERS, id));
+    return d.exists() ? d.data() : null;
+  },
+
+  async addAmbulance(a) {
+    await setDoc(doc(db, this.K.AMBULANCES, a.id), a);
+  },
+
   async addEmergency(e) {
-    await db.collection(this.K.EMERGENCIES).doc(e.id).set(e);
-    return e;
+    await setDoc(doc(db, this.K.EMERGENCIES, e.id), e);
   },
-  async updateEmergency(id, upd) {
-    await db.collection(this.K.EMERGENCIES).doc(id).update(upd);
-    return this.getEmergencyById(id);
-  },
-  async getActiveByPatient(pId) {
-    const snap = await db.collection(this.K.EMERGENCIES)
-      .where('patientId', '==', pId)
-      .where('status', 'in', ['pending','dispatched','arrived','en_route'])
-      .get();
+
+  async getEmergencyById(id) { return this.getEmergency(id); },
+
+  async getActiveByAmbulance(ambulanceId) {
+    const q = query(
+      collection(db, this.K.EMERGENCIES), 
+      where('ambulanceId','==',ambulanceId), 
+      where('status','not-in',['completed','cancelled']),
+      limit(1)
+    );
+    const snap = await getDocs(q);
     return snap.empty ? null : snap.docs[0].data();
   },
-  async getActiveByAmbulance(aId) {
-    const snap = await db.collection(this.K.EMERGENCIES)
-      .where('ambulanceId', '==', aId)
-      .where('status', 'in', ['pending','dispatched','arrived','en_route'])
-      .get();
+  async getActiveByPatient(patientId) {
+    const q = query(
+      collection(db, this.K.EMERGENCIES), 
+      where('patientId','==',patientId), 
+      where('status','not-in',['completed','cancelled']),
+      limit(1)
+    );
+    const snap = await getDocs(q);
     return snap.empty ? null : snap.docs[0].data();
   },
 
-  // ── Session (Stays in LocalStorage for persistence) ──────────
-  getSession()   { return this._getLocal(this.K.SESSION); },
-  setSession(u)  { this._setLocal(this.K.SESSION, u); },
-  clearSession() { localStorage.removeItem(this.K.SESSION); },
+  // Real-time Listeners (Exposed via the global DB object)
+  subscribe(colName, callback) {
+    return onSnapshot(collection(db, colName), (snap) => {
+      callback(snap.docs.map(d => d.data()));
+    });
+  },
 
-  genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,5); },
+  subscribeDoc(colName, id, callback) {
+    return onSnapshot(doc(db, colName, id), (d) => {
+      if (d.exists()) callback(d.data());
+    });
+  },
 
-  distKm(lat1,lng1,lat2,lng2) {
-    const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
-    const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  subscribeIncoming(hospitalId, callback) {
+    const q = query(
+      collection(db, this.K.EMERGENCIES),
+      where('hospitalId','==',hospitalId),
+      where('status','in',['dispatched','arrived','transporting'])
+    );
+    return onSnapshot(q, (snap) => {
+      callback(snap.docs.map(d => d.data()));
+    });
+  },
+
+  genId() { return Math.random().toString(36).substr(2, 9); },
+
+  distKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2-lat1) * Math.PI / 180;
+    const dLon = (lon2-lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
 };
 
+// Seed Data
 const SEED_HOSPITALS = [
-  { id:'h1',  name:'Hospital Kuala Lumpur (HKL)',        shortName:'HKL',           lat:3.1712,  lng:101.6946, totalBeds:150, availableBeds:45, erStatus:'open',     address:'Jalan Pahang, 50586 Kuala Lumpur',                  phone:'03-2615 5555', city:'Kuala Lumpur',      type:'public'  },
-  { id:'h2',  name:'Pantai Hospital Kuala Lumpur',       shortName:'Pantai KL',     lat:3.1065,  lng:101.6693, totalBeds:100, availableBeds:31, erStatus:'open',     address:'8 Jalan Bukit Pantai, 59100 Kuala Lumpur',          phone:'03-2296 0888', city:'Kuala Lumpur',      type:'private' },
-  { id:'h3',  name:'Gleneagles Hospital KL',             shortName:'Gleneagles KL', lat:3.1568,  lng:101.7165, totalBeds:120, availableBeds:12, erStatus:'limited',  address:'286 Jalan Ampang, 50450 Kuala Lumpur',              phone:'03-4141 3000', city:'Kuala Lumpur',      type:'private' },
-  { id:'h4',  name:'Prince Court Medical Centre',        shortName:'Prince Court',  lat:3.1438,  lng:101.7179, totalBeds:80,  availableBeds:0,  erStatus:'full',     address:'39 Jalan Kia Peng, 50450 Kuala Lumpur',             phone:'03-2160 0000', city:'Kuala Lumpur',      type:'private' },
-  { id:'h5',  name:'Hospital Tengku Ampuan Rahimah',     shortName:'HTAR Klang',    lat:3.0449,  lng:101.4437, totalBeds:200, availableBeds:67, erStatus:'open',     address:'Jalan Langat, 41200 Klang, Selangor',               phone:'03-3375 6100', city:'Klang',             type:'public'  },
-  { id:'h6',  name:'Sunway Medical Centre',              shortName:'Sunway',        lat:3.0681,  lng:101.6037, totalBeds:110, availableBeds:38, erStatus:'open',     address:'5 Jalan Lagoon Selatan, 47500 Subang Jaya',         phone:'03-7491 9191', city:'Subang Jaya',       type:'private' },
-  { id:'h7',  name:'Hospital Pulau Pinang',              shortName:'HPP Penang',    lat:5.4159,  lng:100.3308, totalBeds:175, availableBeds:54, erStatus:'open',     address:'Jalan Residensi, Georgetown, Penang',               phone:'04-222 5333',  city:'Georgetown, Penang',type:'public'  },
-  { id:'h8',  name:'Gleneagles Hospital Penang',         shortName:'Gleneagles PNG',lat:5.4219,  lng:100.3148, totalBeds:90,  availableBeds:23, erStatus:'open',     address:'1 Jalan Pangkor, Georgetown, Penang',               phone:'04-222 9111',  city:'Georgetown, Penang',type:'private' },
-  { id:'h9',  name:'Hospital Sultanah Aminah',           shortName:'HSA JB',        lat:1.4655,  lng:103.7578, totalBeds:185, availableBeds:43, erStatus:'open',     address:'Jalan Skudai, 80100 Johor Bahru',                   phone:'07-225 8000',  city:'Johor Bahru',       type:'public'  },
-  { id:'h10', name:'KPJ Johor Specialist Hospital',      shortName:'KPJ Johor',     lat:1.4806,  lng:103.7559, totalBeds:75,  availableBeds:18, erStatus:'limited',  address:'Jalan Abdul Samad, 80100 Johor Bahru',              phone:'07-225 3000',  city:'Johor Bahru',       type:'private' },
-  { id:'h11', name:'Hospital Melaka',                    shortName:'H. Melaka',     lat:2.1907,  lng:102.2468, totalBeds:140, availableBeds:51, erStatus:'open',     address:'Jalan Mufti Haji Khalil, 75400 Melaka',             phone:'06-285 2344',  city:'Melaka',            type:'public'  },
-  { id:'h12', name:'Hospital Queen Elizabeth',           shortName:'HQE KK',        lat:5.9788,  lng:116.0637, totalBeds:160, availableBeds:37, erStatus:'open',     address:'Jalan Penampang, Kota Kinabalu, Sabah',             phone:'088-517 555',  city:'Kota Kinabalu',     type:'public'  },
-  { id:'h13', name:'Hospital Umum Sarawak',              shortName:'HUS Kuching',   lat:1.5493,  lng:110.3475, totalBeds:155, availableBeds:40, erStatus:'open',     address:'Jalan Hospital, 93586 Kuching, Sarawak',            phone:'082-276 666',  city:'Kuching',           type:'public'  },
-  { id:'h14', name:'Hospital Raja Permaisuri Bainun',    shortName:'HRPB Ipoh',     lat:4.5925,  lng:101.0837, totalBeds:130, availableBeds:28, erStatus:'open',     address:'Jalan Raja Ashman Shah, 30450 Ipoh, Perak',         phone:'05-208 5000',  city:'Ipoh',              type:'public'  },
-  { id:'h15', name:"Hospital Tuanku Ja'afar",            shortName:'HTJ Seremban',  lat:2.7158,  lng:101.9439, totalBeds:120, availableBeds:44, erStatus:'open',     address:'Jalan Rasah, 70300 Seremban',                       phone:'06-768 0222',  city:'Seremban',          type:'public'  },
-  { id:'h16', name:'Mahkota Medical Centre',             shortName:'Mahkota Melaka',lat:2.2028,  lng:102.2529, totalBeds:70,  availableBeds:5,  erStatus:'limited',  address:'3 Mahkota Melaka, Jalan Merdeka, 75000 Melaka',     phone:'06-285 2999',  city:'Melaka',            type:'private' },
-  { id:'h17', name:'Columbia Asia Hospital Shah Alam',   shortName:'Columbia SA',   lat:3.0833,  lng:101.5333, totalBeds:85,  availableBeds:29, erStatus:'open',     address:'No 1 Jalan Masjid, Seksyen 1, Shah Alam',          phone:'03-5522 9000', city:'Shah Alam',         type:'private' },
-  { id:'h18', name:'KPJ Ampang Puteri Specialist',       shortName:'KPJ Ampang',    lat:3.1537,  lng:101.7583, totalBeds:95,  availableBeds:33, erStatus:'open',     address:'Jalan Mamanda 9, Ampang Point, Selangor',           phone:'03-4270 2500', city:'Ampang',            type:'private' },
-  { id:'h19', name:'Hospital Shah Alam',                 shortName:'HSA Shah Alam', lat:3.0738,  lng:101.5183, totalBeds:140, availableBeds:62, erStatus:'open',     address:'Persiaran Kayangan, Seksyen 7, Shah Alam',          phone:'03-5544 2000', city:'Shah Alam',         type:'public'  },
-  { id:'h20', name:'Normah Medical Specialist Centre',   shortName:'Normah Kuching',lat:1.5601,  lng:110.3534, totalBeds:65,  availableBeds:21, erStatus:'open',     address:'Jalan Tun Abdul Razak, 93050 Kuching, Sarawak',     phone:'082-440 055',  city:'Kuching',           type:'private' }
+  { id: 'hkl', name: 'Hospital Kuala Lumpur (HKL)', lat: 3.1714, lng: 101.7018, beds: 15, totalBeds: 50, status: 'Open', contact: '+60 3-2615 5555', address: 'Jalan Pahang, 50586 Kuala Lumpur' },
+  { id: 'hselayang', name: 'Hospital Selayang', lat: 3.2424, lng: 101.6508, beds: 8, totalBeds: 40, status: 'Open', contact: '+60 3-6126 3333', address: 'Lebuhraya Selayang-Kepong, 68100 Batu Caves' },
+  { id: 'hsglh', name: 'Hospital Sungai Buloh', lat: 3.2201, lng: 101.5833, beds: 2, totalBeds: 60, status: 'Limited', contact: '+60 3-6145 4333', address: 'Jalan Hospital, 47000 Sungai Buloh' },
+  { id: 'hpj', name: 'University Malaya Medical Centre (PPUM)', lat: 3.1147, lng: 101.6521, beds: 0, totalBeds: 45, status: 'Full', contact: '+60 3-7949 4422', address: 'Lembah Pantai, 59100 Kuala Lumpur' },
+  { id: 'hserdang', name: 'Hospital Serdang', lat: 2.9774, lng: 101.7186, beds: 12, totalBeds: 40, status: 'Open', contact: '+60 3-8947 5555', address: 'Jalan Puchong-Dengkil, 43000 Kajang' },
+  { id: 'hputrajaya', name: 'Hospital Putrajaya', lat: 2.9298, lng: 101.6744, beds: 5, totalBeds: 35, status: 'Open', contact: '+60 3-8312 4200', address: 'Pusat Pentadbiran Kerajaan Persekutuan, Presint 7, 62250' },
+  { id: 'hampang', name: 'Hospital Ampang', lat: 3.1283, lng: 101.7643, beds: 7, totalBeds: 30, status: 'Open', contact: '+60 3-4289 6000', address: 'Jalan Mewah Utara, Pandan Mewah, 68000 Ampang' },
+  { id: 'hkajang', name: 'Hospital Kajang', lat: 2.9934, lng: 101.7909, beds: 3, totalBeds: 25, status: 'Open', contact: '+60 3-8736 3333', address: 'Jalan Semenyih, 43000 Kajang' },
+  { id: 'htps', name: 'Hospital Tengku Ampuan Rahimah', lat: 3.0333, lng: 101.4423, beds: 9, totalBeds: 50, status: 'Open', contact: '+60 3-3323 1333', address: 'Jalan Langat, 41200 Klang' },
+  { id: 'hshahalam', name: 'Hospital Shah Alam', lat: 3.0711, lng: 101.4886, beds: 6, totalBeds: 40, status: 'Open', contact: '+60 3-5526 3000', address: 'Persiaran Kayangan, Seksyen 7, 40000 Shah Alam' },
+  { id: 'hpenang', name: 'Penang General Hospital', lat: 5.4171, lng: 100.3114, beds: 10, totalBeds: 55, status: 'Open', contact: '+60 4-222 5333', address: 'Jalan Residensi, 10990 George Town' },
+  { id: 'hjb', name: 'Hospital Sultanah Aminah', lat: 1.4597, lng: 103.7461, beds: 4, totalBeds: 70, status: 'Open', contact: '+60 7-223 1666', address: 'Jalan Persiaran Abu Bakar Sultan, 80100 Johor Bahru' },
+  { id: 'hkm', name: 'Melaka General Hospital', lat: 2.2217, lng: 102.2619, beds: 8, totalBeds: 45, status: 'Open', contact: '+60 6-270 7070', address: 'Jalan Mufti Haji Khalil, 75400 Melaka' },
+  { id: 'hipoh', name: 'Hospital Raja Permaisuri Bainun', lat: 4.6033, lng: 101.0908, beds: 11, totalBeds: 60, status: 'Open', contact: '+60 5-208 5000', address: 'Jalan Hospital, 30450 Ipoh' },
+  { id: 'hkuching', name: 'Sarawak General Hospital', lat: 1.5436, lng: 110.3375, beds: 14, totalBeds: 65, status: 'Open', contact: '+60 82-276 666', address: 'Jalan Hospital, 93586 Kuching' },
+  { id: 'hkk', name: 'Queen Elizabeth Hospital', lat: 5.9492, lng: 116.0717, beds: 6, totalBeds: 50, status: 'Open', contact: '+60 88-517 555', address: 'Jalan Penampang, 88200 Kota Kinabalu' },
+  { id: 'hgenting', name: 'Genting Highlands Medical Clinic', lat: 3.4239, lng: 101.7911, beds: 2, totalBeds: 10, status: 'Open', contact: '+60 3-6101 1118', address: 'Genting Highlands, 69000' },
+  { id: 'sunway', name: 'Sunway Medical Centre', lat: 3.0645, lng: 101.6074, beds: 20, totalBeds: 100, status: 'Open', contact: '+60 3-7491 9191', address: 'Jalan Lagoon Selatan, Bandar Sunway, 47500 Petaling Jaya' },
+  { id: 'gleneagles', name: 'Gleneagles Kuala Lumpur', lat: 3.1594, lng: 101.7346, beds: 12, totalBeds: 80, status: 'Open', contact: '+60 3-4141 3000', address: 'Jalan Ampang, 50450 Kuala Lumpur' },
+  { id: 'pantai', name: 'Pantai Hospital Kuala Lumpur', lat: 3.1189, lng: 101.6745, beds: 5, totalBeds: 70, status: 'Open', contact: '+60 3-2296 0888', address: 'Jalan Bukit Pantai, 59100 Kuala Lumpur' }
 ];
 
 const SEED_AMBULANCES = [
-  { id:'a1', driverId:'demo_ambulance', vehicleNo:'WB 1234 K', name:'KL Unit 01',      status:'available', lat:3.1612,  lng:101.7046,  currentEmergencyId:null },
-  { id:'a2', driverId:null,             vehicleNo:'WB 5678 K', name:'KL Unit 02',      status:'available', lat:3.1450,  lng:101.6850,  currentEmergencyId:null },
-  { id:'a3', driverId:null,             vehicleNo:'WB 9012 K', name:'KL Unit 03',      status:'off_duty',  lat:3.0981,  lng:101.7123,  currentEmergencyId:null },
-  { id:'a4', driverId:null,             vehicleNo:'PGA 3456',  name:'Penang Unit 01',  status:'available', lat:5.4100,  lng:100.3350,  currentEmergencyId:null },
-  { id:'a5', driverId:null,             vehicleNo:'JPC 7890',  name:'JB Unit 01',      status:'available', lat:1.4700,  lng:103.7600,  currentEmergencyId:null }
+  { id: 'amb-kl-1', name: 'Unit 101 (KL)', lat: 3.1714, lng: 101.7018, status: 'available', driver: 'Ahmad' },
+  { id: 'amb-kl-2', name: 'Unit 102 (KL)', lat: 3.1500, lng: 101.7100, status: 'available', driver: 'Raj' },
+  { id: 'amb-pj-1', name: 'Unit 201 (PJ)', lat: 3.1147, lng: 101.6521, status: 'available', driver: 'Tan' }
 ];
 
-const SEED_USERS = [
-  { id:'demo_patient',   name:'Ahmad Razif (Demo)',          email:'patient@demo.com',   password:'demo123', role:'patient',    createdAt:Date.now() },
-  { id:'demo_hospital',  name:'Dr. Lim Wei Jian (Demo)',     email:'hospital@demo.com',  password:'demo123', role:'hospital',   hospitalId:'h1', createdAt:Date.now() },
-  { id:'demo_ambulance', name:'Rajan Saminathan (Demo)',     email:'ambulance@demo.com', password:'demo123', role:'ambulance',  ambulanceId:'a1', createdAt:Date.now() }
-];
-
+// Export to window for non-module scripts
+window.DB = DB;
+window.GEMINI_API_KEY = GEMINI_API_KEY;
+window.firebaseConfig = firebaseConfig;
+window.CONFIG = window.CONFIG || { GEMINI_API_KEY: '' };

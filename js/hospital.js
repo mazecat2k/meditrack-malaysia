@@ -118,11 +118,9 @@ const HospitalDash = {
 
   _subscribeToIncoming() {
     if (this.emergencyListener) this.emergencyListener();
-    this.emergencyListener = db.collection(DB.K.EMERGENCIES)
-      .where('hospitalId', '==', this.hospital.id)
-      .onSnapshot(async () => {
-         await this._refreshIncomingUI();
-      });
+    this.emergencyListener = DB.subscribeIncoming(this.hospital.id, async () => {
+       await this._refreshIncomingUI();
+    });
   },
 
   destroy() { if(this.emergencyListener) this.emergencyListener(); }
