@@ -29,16 +29,25 @@ window.PatientDash = {
       this.userLat = pos.lat; this.userLng = pos.lng;
     } catch(e) {}
     
-    // Spawn local ambulances if none are within 30km
+    // Spawn local ambulances if there are less than 3 within 30km (for Demo)
     const ambs = await DB.getAmbulances();
     const nearAmbs = ambs.filter(a => DB.distKm(this.userLat, this.userLng, a.lat, a.lng) < 30);
-    if (nearAmbs.length === 0) {
-      await DB.addAmbulance({ id: DB.genId(), driverId: null, vehicleNo: 'MED ' + Math.floor(Math.random()*9000+1000), name: 'Local Unit 01', status: 'available', lat: this.userLat + 0.015, lng: this.userLng + 0.018, currentEmergencyId: null });
-      await DB.addAmbulance({ id: DB.genId(), driverId: null, vehicleNo: 'MED ' + Math.floor(Math.random()*9000+1000), name: 'Local Unit 02', status: 'available', lat: this.userLat - 0.01, lng: this.userLng + 0.02, currentEmergencyId: null });
+    if (nearAmbs.length < 3) {
+      for (let i = nearAmbs.length; i < 3; i++) {
+        const offsetLat = (Math.random() - 0.5) * 0.05;
+        const offsetLng = (Math.random() - 0.5) * 0.05;
+        await DB.addAmbulance({ 
+          id: DB.genId(), driverId: null, 
+          vehicleNo: 'MED ' + Math.floor(Math.random()*9000+1000), 
+          name: `Local Unit ${i+1}`, status: 'available', 
+          lat: this.userLat + offsetLat, lng: this.userLng + offsetLng, 
+          currentEmergencyId: null 
+        });
+      }
     }
 
     MapManager.setPatientMarker(this.userLat, this.userLng, '📍 You');
-    MapManager.panTo(this.userLat, this.userLng, 13);
+    MapManager.panTo(this.userLat, this.userLng, 12);
     await this._refreshHospitalList();
   },
 

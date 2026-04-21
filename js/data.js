@@ -50,7 +50,7 @@ async function connectToDatabase() {
 
 // Global DB wrapper initialization
 const DB = {
-  K: { USERS:'users', HOSPITALS:'hospitals', AMBULANCES:'ambulances', EMERGENCIES:'emergencies', SESSION:'hmt_session' },
+  K: { USERS:'users_v2', HOSPITALS:'hospitals_v2', AMBULANCES:'ambulances_v2', EMERGENCIES:'emergencies_v2', SESSION:'hmt_session_v2' },
 
   async init() {
     try {
@@ -270,27 +270,60 @@ const SEED_HOSPITALS = [
   { id: 'hsglh', name: 'Hospital Sungai Buloh', lat: 3.2201, lng: 101.5833, beds: 2, totalBeds: 60, status: 'Limited', contact: '+60 3-6145 4333', address: 'Jalan Hospital, 47000 Sungai Buloh' },
   { id: 'hpj', name: 'University Malaya Medical Centre (PPUM)', lat: 3.1147, lng: 101.6521, beds: 0, totalBeds: 45, status: 'Full', contact: '+60 3-7949 4422', address: 'Lembah Pantai, 59100 Kuala Lumpur' },
   { id: 'hserdang', name: 'Hospital Serdang', lat: 2.9774, lng: 101.7186, beds: 12, totalBeds: 40, status: 'Open', contact: '+60 3-8947 5555', address: 'Jalan Puchong-Dengkil, 43000 Kajang' },
-  { id: 'hputrajaya', name: 'Hospital Putrajaya', lat: 2.9298, lng: 101.6744, beds: 5, totalBeds: 35, status: 'Open', contact: '+60 3-8312 4200', address: 'Pusat Pentadbiran Kerajaan Persekutuan, Presint 7, 62250' },
-  { id: 'hampang', name: 'Hospital Ampang', lat: 3.1283, lng: 101.7643, beds: 7, totalBeds: 30, status: 'Open', contact: '+60 3-4289 6000', address: 'Jalan Mewah Utara, Pandan Mewah, 68000 Ampang' },
-  { id: 'hkajang', name: 'Hospital Kajang', lat: 2.9934, lng: 101.7909, beds: 3, totalBeds: 25, status: 'Open', contact: '+60 3-8736 3333', address: 'Jalan Semenyih, 43000 Kajang' },
-  { id: 'htps', name: 'Hospital Tengku Ampuan Rahimah', lat: 3.0333, lng: 101.4423, beds: 9, totalBeds: 50, status: 'Open', contact: '+60 3-3323 1333', address: 'Jalan Langat, 41200 Klang' },
-  { id: 'hshahalam', name: 'Hospital Shah Alam', lat: 3.0711, lng: 101.4886, beds: 6, totalBeds: 40, status: 'Open', contact: '+60 3-5526 3000', address: 'Persiaran Kayangan, Seksyen 7, 40000 Shah Alam' },
-  { id: 'hpenang', name: 'Penang General Hospital', lat: 5.4171, lng: 100.3114, beds: 10, totalBeds: 55, status: 'Open', contact: '+60 4-222 5333', address: 'Jalan Residensi, 10990 George Town' },
-  { id: 'hjb', name: 'Hospital Sultanah Aminah', lat: 1.4597, lng: 103.7461, beds: 4, totalBeds: 70, status: 'Open', contact: '+60 7-223 1666', address: 'Jalan Persiaran Abu Bakar Sultan, 80100 Johor Bahru' },
-  { id: 'hkm', name: 'Melaka General Hospital', lat: 2.2217, lng: 102.2619, beds: 8, totalBeds: 45, status: 'Open', contact: '+60 6-270 7070', address: 'Jalan Mufti Haji Khalil, 75400 Melaka' },
-  { id: 'hipoh', name: 'Hospital Raja Permaisuri Bainun', lat: 4.6033, lng: 101.0908, beds: 11, totalBeds: 60, status: 'Open', contact: '+60 5-208 5000', address: 'Jalan Hospital, 30450 Ipoh' },
-  { id: 'hkuching', name: 'Sarawak General Hospital', lat: 1.5436, lng: 110.3375, beds: 14, totalBeds: 65, status: 'Open', contact: '+60 82-276 666', address: 'Jalan Hospital, 93586 Kuching' },
-  { id: 'hkk', name: 'Queen Elizabeth Hospital', lat: 5.9492, lng: 116.0717, beds: 6, totalBeds: 50, status: 'Open', contact: '+60 88-517 555', address: 'Jalan Penampang, 88200 Kota Kinabalu' },
-  { id: 'hgenting', name: 'Genting Highlands Medical Clinic', lat: 3.4239, lng: 101.7911, beds: 2, totalBeds: 10, status: 'Open', contact: '+60 3-6101 1118', address: 'Genting Highlands, 69000' },
-  { id: 'sunway', name: 'Sunway Medical Centre', lat: 3.0645, lng: 101.6074, beds: 20, totalBeds: 100, status: 'Open', contact: '+60 3-7491 9191', address: 'Jalan Lagoon Selatan, Bandar Sunway, 47500 Petaling Jaya' },
-  { id: 'gleneagles', name: 'Gleneagles Kuala Lumpur', lat: 3.1594, lng: 101.7346, beds: 12, totalBeds: 80, status: 'Open', contact: '+60 3-4141 3000', address: 'Jalan Ampang, 50450 Kuala Lumpur' },
-  { id: 'pantai', name: 'Pantai Hospital Kuala Lumpur', lat: 3.1189, lng: 101.6745, beds: 5, totalBeds: 70, status: 'Open', contact: '+60 3-2296 0888', address: 'Jalan Bukit Pantai, 59100 Kuala Lumpur' }
+  // Kuala Lumpur
+  { id: 'hkl', name: 'Hospital Kuala Lumpur', shortName: 'HKL', lat: 3.1714, lng: 101.7018, availableBeds: 45, totalBeds: 2300, erStatus: 'limited', phone: '+60 3-2615 5555', address: 'Jalan Pahang, 50586 Kuala Lumpur', city: 'Kuala Lumpur', type: 'public' },
+  { id: 'ppum', name: 'Pusat Perubatan Universiti Malaya', shortName: 'PPUM', lat: 3.1121, lng: 101.6534, availableBeds: 22, totalBeds: 1600, erStatus: 'open', phone: '+60 3-7949 4422', address: 'Jalan Universiti, 59100 Kuala Lumpur', city: 'Kuala Lumpur', type: 'public' },
+  { id: 'hctm', name: 'Hospital Canselor Tuanku Muhriz UKM', shortName: 'HCTM', lat: 3.1009, lng: 101.7208, availableBeds: 15, totalBeds: 1054, erStatus: 'open', phone: '+60 3-9145 5555', address: 'Jalan Yaacob Latif, 56000 Kuala Lumpur', city: 'Kuala Lumpur', type: 'public' },
+  { id: 'gleneagles_kl', name: 'Gleneagles Kuala Lumpur', shortName: 'Gleneagles KL', lat: 3.1594, lng: 101.7346, availableBeds: 12, totalBeds: 330, erStatus: 'open', phone: '+60 3-4141 3000', address: 'Jalan Ampang, 50450 Kuala Lumpur', city: 'Kuala Lumpur', type: 'private' },
+  { id: 'pantai_kl', name: 'Pantai Hospital Kuala Lumpur', shortName: 'Pantai KL', lat: 3.1189, lng: 101.6745, availableBeds: 5, totalBeds: 335, erStatus: 'open', phone: '+60 3-2296 0888', address: 'Jalan Bukit Pantai, 59100 Kuala Lumpur', city: 'Kuala Lumpur', type: 'private' },
+  
+  // Selangor
+  { id: 'htar', name: 'Hospital Tengku Ampuan Rahimah', shortName: 'HTAR', lat: 3.0333, lng: 101.4447, availableBeds: 0, totalBeds: 1094, erStatus: 'full', phone: '+60 3-3323 9999', address: 'Jalan Langat, 41200 Klang, Selangor', city: 'Klang', type: 'public' },
+  { id: 'hsgbuloh', name: 'Hospital Sungai Buloh', shortName: 'H. Sg Buloh', lat: 3.2185, lng: 101.5835, availableBeds: 34, totalBeds: 1300, erStatus: 'open', phone: '+60 3-6145 4333', address: 'Jalan Hospital, 47000 Sungai Buloh, Selangor', city: 'Sungai Buloh', type: 'public' },
+  { id: 'hserdang', name: 'Hospital Serdang', shortName: 'H. Serdang', lat: 2.9754, lng: 101.7204, availableBeds: 18, totalBeds: 920, erStatus: 'limited', phone: '+60 3-8947 5200', address: 'Jalan Puchong, 43000 Serdang, Selangor', city: 'Serdang', type: 'public' },
+  { id: 'hselayang', name: 'Hospital Selayang', shortName: 'H. Selayang', lat: 3.2458, lng: 101.6447, availableBeds: 21, totalBeds: 960, erStatus: 'open', phone: '+60 3-6120 3233', address: 'Lebuhraya Selayang-Kepong, 68100 Batu Caves, Selangor', city: 'Selayang', type: 'public' },
+  { id: 'sunway_med', name: 'Sunway Medical Centre', shortName: 'Sunway Med', lat: 3.0645, lng: 101.6074, availableBeds: 25, totalBeds: 600, erStatus: 'open', phone: '+60 3-7491 9191', address: 'Jalan Lagoon Selatan, 47500 Petaling Jaya, Selangor', city: 'Petaling Jaya', type: 'private' },
+
+  // Putrajaya
+  { id: 'hputrajaya', name: 'Hospital Putrajaya', shortName: 'H. Putrajaya', lat: 2.9298, lng: 101.6742, availableBeds: 11, totalBeds: 369, erStatus: 'open', phone: '+60 3-8312 4200', address: 'Precinct 7, 62250 Putrajaya', city: 'Putrajaya', type: 'public' },
+
+  // Penang
+  { id: 'hpenang', name: 'Hospital Pulau Pinang', shortName: 'HPP', lat: 5.4172, lng: 100.3117, availableBeds: 40, totalBeds: 1100, erStatus: 'open', phone: '+60 4-222 5333', address: 'Jalan Residensi, 10990 George Town, Penang', city: 'George Town', type: 'public' },
+  { id: 'hsejaya', name: 'Hospital Seberang Jaya', shortName: 'H. Sbj', lat: 5.3948, lng: 100.4046, availableBeds: 0, totalBeds: 393, erStatus: 'full', phone: '+60 4-382 7333', address: 'Jalan Tun Hussein Onn, 13700 Perai, Penang', city: 'Perai', type: 'public' },
+
+  // Johor
+  { id: 'hsa', name: 'Hospital Sultanah Aminah', shortName: 'HSA', lat: 1.4597, lng: 103.7461, availableBeds: 14, totalBeds: 1206, erStatus: 'limited', phone: '+60 7-223 1666', address: 'Jalan Persiaran Abu Bakar Sultan, 80100 Johor Bahru, Johor', city: 'Johor Bahru', type: 'public' },
+  { id: 'hsi', name: 'Hospital Sultan Ismail', shortName: 'HSI', lat: 1.5475, lng: 103.7964, availableBeds: 23, totalBeds: 700, erStatus: 'open', phone: '+60 7-356 5000', address: 'Jalan Mutiara Emas Utama, 81100 Johor Bahru, Johor', city: 'Johor Bahru', type: 'public' },
+
+  // Melaka
+  { id: 'hmelaka', name: 'Hospital Melaka', shortName: 'H. Melaka', lat: 2.2217, lng: 102.2619, availableBeds: 8, totalBeds: 1000, erStatus: 'open', phone: '+60 6-270 7070', address: 'Jalan Mufti Haji Khalil, 75400 Melaka', city: 'Melaka', type: 'public' },
+
+  // Negeri Sembilan
+  { id: 'htj', name: 'Hospital Tuanku Ja\'afar', shortName: 'HTJ', lat: 2.7145, lng: 101.9427, availableBeds: 19, totalBeds: 800, erStatus: 'open', phone: '+60 6-768 4000', address: 'Jalan Rasah, 70300 Seremban, Negeri Sembilan', city: 'Seremban', type: 'public' },
+
+  // Perak
+  { id: 'hrpb', name: 'Hospital Raja Permaisuri Bainun', shortName: 'HRPB', lat: 4.6033, lng: 101.0908, availableBeds: 30, totalBeds: 990, erStatus: 'open', phone: '+60 5-208 5000', address: 'Jalan Hospital, 30450 Ipoh, Perak', city: 'Ipoh', type: 'public' },
+  { id: 'htaiping', name: 'Hospital Taiping', shortName: 'H. Taiping', lat: 4.8558, lng: 100.7397, availableBeds: 16, totalBeds: 600, erStatus: 'open', phone: '+60 5-820 4000', address: 'Jalan Taming Sari, 34000 Taiping, Perak', city: 'Taiping', type: 'public' },
+
+  // Kedah & Perlis
+  { id: 'hsb', name: 'Hospital Sultanah Bahiyah', shortName: 'HSB', lat: 6.1481, lng: 100.4069, availableBeds: 21, totalBeds: 1100, erStatus: 'open', phone: '+60 4-740 6233', address: 'KM 6, Jalan Langgar, 05460 Alor Setar, Kedah', city: 'Alor Setar', type: 'public' },
+  { id: 'htf', name: 'Hospital Tuanku Fauziah', shortName: 'HTF', lat: 6.4402, lng: 100.1916, availableBeds: 7, totalBeds: 400, erStatus: 'limited', phone: '+60 4-973 8000', address: 'Jalan Kolam, 01000 Kangar, Perlis', city: 'Kangar', type: 'public' },
+
+  // Pahang & Terengganu & Kelantan
+  { id: 'htaa', name: 'Hospital Tengku Ampuan Afzan', shortName: 'HTAA', lat: 3.8010, lng: 103.3210, availableBeds: 15, totalBeds: 850, erStatus: 'open', phone: '+60 9-513 3333', address: 'Jalan Tanah Putih, 25100 Kuantan, Pahang', city: 'Kuantan', type: 'public' },
+  { id: 'hsnz', name: 'Hospital Sultanah Nur Zahirah', shortName: 'HSNZ', lat: 5.3242, lng: 103.1492, availableBeds: 20, totalBeds: 1000, erStatus: 'open', phone: '+60 9-621 2121', address: 'Jalan Sultan Mahmud, 20400 Kuala Terengganu, Terengganu', city: 'Kuala Terengganu', type: 'public' },
+  { id: 'hrpz', name: 'Hospital Raja Perempuan Zainab II', shortName: 'HRPZ II', lat: 6.1245, lng: 102.2472, availableBeds: 5, totalBeds: 900, erStatus: 'limited', phone: '+60 9-745 2000', address: 'Jalan Hospital, 15586 Kota Bharu, Kelantan', city: 'Kota Bharu', type: 'public' },
+
+  // Sabah & Sarawak
+  { id: 'hqek', name: 'Hospital Queen Elizabeth', shortName: 'HQE', lat: 5.9492, lng: 116.0717, availableBeds: 12, totalBeds: 700, erStatus: 'open', phone: '+60 88-517 555', address: 'Jalan Penampang, 88200 Kota Kinabalu, Sabah', city: 'Kota Kinabalu', type: 'public' },
+  { id: 'hsk', name: 'Hospital Umum Sarawak', shortName: 'SGH', lat: 1.5436, lng: 110.3375, availableBeds: 28, totalBeds: 1000, erStatus: 'open', phone: '+60 82-276 666', address: 'Jalan Hospital, 93586 Kuching, Sarawak', city: 'Kuching', type: 'public' },
+  { id: 'hmiri', name: 'Hospital Miri', shortName: 'H. Miri', lat: 4.3855, lng: 113.9859, availableBeds: 9, totalBeds: 350, erStatus: 'limited', phone: '+60 85-420 033', address: 'Jalan Cahaya, 98000 Miri, Sarawak', city: 'Miri', type: 'public' }
 ];
 
 const SEED_AMBULANCES = [
-  { id: 'amb-kl-1', name: 'Unit 101 (KL)', lat: 3.1714, lng: 101.7018, status: 'available', driver: 'Ahmad' },
-  { id: 'amb-kl-2', name: 'Unit 102 (KL)', lat: 3.1500, lng: 101.7100, status: 'available', driver: 'Raj' },
-  { id: 'amb-pj-1', name: 'Unit 201 (PJ)', lat: 3.1147, lng: 101.6521, status: 'available', driver: 'Tan' }
+  { id: 'amb-db-1', name: 'Alpha Unit (Demo)', vehicleNo: 'WNM 1010', status: 'available', lat: 3.1714, lng: 101.7018 },
+  { id: 'amb-db-2', name: 'Bravo Unit (Demo)', vehicleNo: 'VAA 2233', status: 'available', lat: 3.1500, lng: 101.7100 },
+  { id: 'amb-db-3', name: 'Charlie Unit (Demo)', vehicleNo: 'BKP 505', status: 'available', lat: 3.1147, lng: 101.6521 }
 ];
 
 // Export to window for non-module scripts
