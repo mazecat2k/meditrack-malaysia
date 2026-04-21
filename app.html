@@ -94,15 +94,8 @@
     const checkDB = setInterval(async () => {
       if (window.DB) {
         clearInterval(checkDB);
-        const user = await window.DB.getSessionUser();
-        if (!user) { window.location.href = 'index.html'; return; }
-        
-        // Initialize dashboard based on role
-        if (user.role === 'patient') PatientDash.init(user);
-        else if (user.role === 'ambulance') AmbulanceDash.init(user);
-        else if (user.role === 'hospital') HospitalDash.init(user);
-        
-        Chatbot.init(user);
+        // Initialize application
+        await window.App.init();
       }
     }, 50);
   })();
