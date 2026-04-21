@@ -204,7 +204,7 @@ window.PatientDash = {
   _startSimulation(ambulanceId, path) {
     if (this.simInterval) clearInterval(this.simInterval);
     const realEta = this.etaSeconds; // real ETA from OSRM
-    const demoSteps = Math.min(Math.max(20, Math.round(realEta / 30)), 45); // 20-45 demo steps
+    const demoSteps = Math.min(Math.max(60, Math.round(realEta / 15)), 120); // 60-120 demo steps
     let steps = 0;
 
     this.simInterval = setInterval(async () => {
@@ -321,7 +321,7 @@ window.PatientDash = {
   _startHospitalSim(ambulanceId, hospital, path) {
     if (this.simInterval) clearInterval(this.simInterval);
     const realEta = this.etaSeconds; // real ETA from OSRM
-    const demoSteps = Math.min(Math.max(20, Math.round(realEta / 30)), 45); // 20-45 demo steps
+    const demoSteps = Math.min(Math.max(60, Math.round(realEta / 15)), 120); // 60-120 demo steps
     let steps = 0;
     
     console.log(`[Sim] Hospital sim: ${realEta}s real ETA, compressed to ${demoSteps} demo steps`);
